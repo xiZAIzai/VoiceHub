@@ -177,6 +177,10 @@ CREATE INDEX IF NOT EXISTS idx_embedding_status ON transcript_logs(embedding_sta
 }
 ```
 
+> 注（2026-08-19，ADR-4 定案）：`shandianshuo.polling_timeout_sec`（原 6s）语义不成立——
+> 录音时长不限，改为 `pending_timeout_sec`（默认 30s，粘滞目标过期）+ 新增 `stability_ms`
+> （默认 600，去抖）。详见 [PLAN.md ADR-4](../PLAN.md)。
+
 ---
 
 ## 7. 本机开发任务拆解清单 (Todo Checklist)

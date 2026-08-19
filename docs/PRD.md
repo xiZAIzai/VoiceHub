@@ -181,6 +181,10 @@ CREATE INDEX IF NOT EXISTS idx_embedding_status ON transcript_logs(embedding_sta
 > 录音时长不限，改为 `pending_timeout_sec`（默认 30s，粘滞目标过期）+ 新增 `stability_ms`
 > （默认 600，去抖）。详见 [PLAN.md ADR-4](../PLAN.md)。
 
+> 注（2026-08-19，ADR-2 修订）：设备地址不再依赖固定 IP——目标设备通过 UDP 心跳广播自报家门
+> （name+port），台式机自动发现并维护在线设备表，路由查表取当前 IP。config 中 `endpoint` 可省略
+> （由发现结果解析），固定网络也可手动写死覆盖。详见 [PLAN.md ADR-2](../PLAN.md)。
+
 ---
 
 ## 7. 本机开发任务拆解清单 (Todo Checklist)

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 环境/敏感信息
+.env
+.env.*
+!.env.example
+*.key
+config.local.json
+
+# 运行时数据（含个人记忆库）
+*.db
+*.db-journal
+logs/
+data/
+
+# IDE / OS
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 前端构建产物（如引入构建链后启用）
+node_modules/
+dist/

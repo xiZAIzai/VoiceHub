@@ -7,7 +7,13 @@
 
 - [ ] 窗口交互三步：点 X 驻留托盘 → 托盘「打开主窗口」唤回 → 托盘「退出」彻底关闭
   （exe 当前版本为 pywebview 关窗语义修复后的重建版）。
-- [ ] commit + push 后观察 GitHub Actions 首跑；满意后打 `v0.2.0` 发首个 Release。
+- [x] commit + push 后观察 GitHub Actions 首跑；满意后打 `v0.2.0` 发首个 Release。
+  **完成时间**: 2026-08-20（Release v0.2.0 已发布，附双 exe zip）
+  - CI 首跑两坑（均在执行本条目时修复）：① 构建脚本写死 `.venv\Scripts\pyinstaller.exe`，
+    CI 无 .venv 直接退出 → 改为"本地优先 .venv、否则系统 python -m PyInstaller"；
+    ② 默认 GITHUB_TOKEN 只读，发 Release 403 → workflow 加 `permissions: contents: write`。
+  - 终态：main / v0.2.0 流水线全绿；产物 VoiceHub-windows-x64.zip（31MB）、
+    VoiceHubReceiver-windows-x64.zip（14MB）。
 - [ ] 笔记本部署 VoiceHubReceiver exe，Alt+2 跑一轮真链路（发一条语音到笔记本粘贴）。
 - [ ] 托盘勾选「开机自启」后重启电脑，验证托盘自动出现（此前已注册过一次）。
 

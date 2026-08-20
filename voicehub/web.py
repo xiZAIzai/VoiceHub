@@ -1,8 +1,9 @@
-"""Web 仪表盘（ADR-3）：FastAPI 单文件 HTML + 状态 API + WebSocket 推送。
+"""Web 仪表盘（ADR-3）：FastAPI 单文件 HTML + 状态 API + WebSocket 推送 + 配置读写。
 
 - GET /        : 单文件 HTML（Tailwind + Vue CDN，无构建链）。
 - GET /api/state : 聚合状态（粘滞目标 / 在线设备 / 绑定热键 / 目标）。
 - GET /api/logs  : 历史转写记录。
+- GET/PUT /api/config : 配置读取 / 保存（M6-③ 设置页，写回走 ConfigService）。
 - WS /ws        : 每 2s 推送一次状态快照，前端只读订阅。
 
 collect_state 为纯函数，便于单测；FastAPI 端点薄封装依赖。
@@ -13,9 +14,11 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 
 from .config import Config
+from .settings import ConfigError, ConfigService
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -70,12 +73,14 @@ class Dashboard:
         sticky: Optional[object] = None,
         discovery: Optional[object] = None,
         hotkey: Optional[object] = None,
+        settings: Optional[ConfigService] = None,
     ) -> None:
         self._config = config
         self._storage = storage
         self._sticky = sticky
         self._discovery = discovery
         self._hotkey = hotkey
+        self._settings = settings
 
     def state(self) -> dict[str, Any]:
         return collect_state(self._config, self._sticky, self._discovery, self._hotkey)
@@ -98,6 +103,23 @@ class Dashboard:
             if self._storage is None:
                 return []
             return self._storage.recent(limit=limit, category=category)
+
+        @app.get("/api/config")
+        def api_config_get():
+            """设置页读取：返回 config.json 原始结构。"""
+            if self._settings is None:
+                return {"ok": False, "error": "本实例未启用配置服务"}
+            return self._settings.get()
+
+        @app.put("/api/config")
+        async def api_config_put(req: Request):
+            """设置页保存：校验 + 原子写回 + 热应用；非法配置返回 400。"""
+            if self._settings is None:
+                return {"ok": False, "error": "本实例未启用配置服务"}
+            try:
+                return self._settings.update(await req.json())
+            except ConfigError as e:
+                return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
         @app.websocket("/ws")
         async def ws(websocket: WebSocket):
@@ -122,13 +144,60 @@ _INDEX_HTML = """<!doctype html>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
-<div id="app" class="max-w-4xl mx-auto p-6">
-  <header class="mb-6">
-    <h1 class="text-2xl font-bold">VoiceHub</h1>
-    <p class="text-slate-400 text-sm">语音转写多设备分发 · 只读仪表盘</p>
+<div id="app" class="max-w-4xl mx-auto p-6" v-cloak>
+  <header class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">VoiceHub</h1>
+      <p class="text-slate-400 text-sm">语音转写多设备分发 · 仪表盘</p>
+    </div>
+    <button @click="toggleSettings"
+            class="bg-slate-700 hover:bg-slate-600 text-sm px-3 py-1.5 rounded">
+      {{ showSettings ? '返回状态页' : '设置' }}
+    </button>
   </header>
 
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <!-- 设置页（M6-③）：目标设备 / 去抖 / 超时可视化编辑，保存走 /api/config -->
+  <section v-if="showSettings" class="space-y-4">
+    <div v-if="!cfg" class="text-slate-500">配置加载中…</div>
+    <template v-else>
+      <div class="bg-slate-800 rounded-lg p-4">
+        <h2 class="text-sm text-slate-400 mb-3">目标设备（热键 / 名称 / 固定端点，改后需重启生效）</h2>
+        <div v-for="(t, key) in cfg.targets" :key="key" class="grid grid-cols-12 gap-2 mb-2 items-center">
+          <label class="col-span-2 text-xs text-slate-500 self-center">{{ key }}</label>
+          <input v-model="t.name" placeholder="名称" class="col-span-4 bg-slate-700 rounded px-2 py-1 text-sm">
+          <div class="col-span-2 flex items-center gap-1">
+            <span class="text-xs text-slate-500 font-mono">Alt+</span>
+            <input v-model="t.hotkey" class="w-12 bg-slate-700 rounded px-2 py-1 text-sm text-center font-mono">
+          </div>
+          <input v-model="t.endpoint" placeholder="端点(可空,自动发现)" class="col-span-4 bg-slate-700 rounded px-2 py-1 text-sm">
+        </div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-4">
+        <h2 class="text-sm text-slate-400 mb-3">转写判定参数（保存后即时生效）</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="text-sm">去抖等待 stability_ms（毫秒）
+            <input type="number" v-model.number="cfg.voicehub.stability_ms"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          </label>
+          <label class="text-sm">粘滞等待 pending_timeout_sec（秒，需覆盖最长听写）
+            <input type="number" v-model.number="cfg.voicehub.pending_timeout_sec"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button @click="saveConfig" :disabled="saving"
+                class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+          {{ saving ? '保存中…' : '保存配置' }}
+        </button>
+        <span v-if="saveMsg" :class="saveMsg.ok ? 'text-emerald-400' : 'text-red-400'" class="text-sm">
+          {{ saveMsg.text }}
+        </span>
+      </div>
+    </template>
+  </section>
+
+  <section v-show="!showSettings" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <div class="bg-slate-800 rounded-lg p-4">
       <h2 class="text-sm text-slate-400 mb-2">粘滞目标</h2>
       <div v-if="state.sticky.armed" class="text-emerald-400">
@@ -148,7 +217,7 @@ _INDEX_HTML = """<!doctype html>
     </div>
   </section>
 
-  <section class="bg-slate-800 rounded-lg p-4 mb-6">
+  <section v-show="!showSettings" class="bg-slate-800 rounded-lg p-4 mb-6">
     <h2 class="text-sm text-slate-400 mb-2">目标绑定</h2>
     <table class="w-full text-sm">
       <thead class="text-slate-500"><tr>
@@ -165,7 +234,7 @@ _INDEX_HTML = """<!doctype html>
     </table>
   </section>
 
-  <section class="bg-slate-800 rounded-lg p-4">
+  <section v-show="!showSettings" class="bg-slate-800 rounded-lg p-4">
     <h2 class="text-sm text-slate-400 mb-2">最近转写</h2>
     <ul>
       <li v-for="log in logs" :key="log.id" class="border-t border-slate-700 py-2">
@@ -180,7 +249,12 @@ _INDEX_HTML = """<!doctype html>
 <script>
 const { createApp } = Vue;
 createApp({
-  data() { return { state: { sticky: { armed: false }, targets: [], hotkeys: {} }, logs: [] }; },
+  data() { return {
+    state: { sticky: { armed: false }, targets: [], hotkeys: {} },
+    logs: [],
+    // 设置页（M6-③）：cfg 为 /api/config 原始结构，编辑后整份 PUT 回传
+    showSettings: false, cfg: null, saving: false, saveMsg: null,
+  }; },
   computed: {
     stickyTargetName() {
       const t = this.state.targets.find(x => x.key === this.state.sticky.target_key);
@@ -192,6 +266,34 @@ createApp({
     async refreshLogs() {
       const r = await fetch('/api/logs?limit=20');
       this.logs = await r.json();
+    },
+    async toggleSettings() {
+      this.showSettings = !this.showSettings;
+      if (this.showSettings && !this.cfg) {
+        const r = await fetch('/api/config');
+        this.cfg = await r.json();
+      }
+    },
+    async saveConfig() {
+      this.saving = true; this.saveMsg = null;
+      try {
+        const r = await fetch('/api/config', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.cfg),
+        });
+        const data = await r.json();
+        if (r.ok && data.ok) {
+          this.saveMsg = data.need_restart
+            ? { ok: true, text: '已保存；目标/热键等变更重启程序后生效' }
+            : { ok: true, text: '已保存并生效' };
+        } else {
+          this.saveMsg = { ok: false, text: '保存失败：' + (data.error || r.status) };
+        }
+      } catch (e) {
+        this.saveMsg = { ok: false, text: '保存失败：' + e };
+      } finally {
+        this.saving = false;
+      }
     }
   },
   mounted() {

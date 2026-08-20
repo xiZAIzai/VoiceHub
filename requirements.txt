@@ -12,3 +12,7 @@ Pillow>=10.0; sys_platform == "win32"
 # 开发 / 测试
 pytest>=8.0
 httpx>=0.27  # FastAPI TestClient 依赖
+
+# 打包（M6 桌面化：PyInstaller 构建 exe，仅开发机需要）
+pyinstaller>=6.0; sys_platform == "win32"
+pywebview>=5.0; sys_platform == "win32"  # 原生窗口（M6-␓）

@@ -1,4 +1,6 @@
-"""仪表盘单测：collect_state 聚合、API 端点、历史查询。"""
+"""仪表盘单测：collect_state 聚合、API 端点、历史查询、配置读写 API。"""
+import json
+
 from fastapi.testclient import TestClient
 
 from voicehub.config import Config, TargetConfig
@@ -81,3 +83,48 @@ def test_dashboard_index_serves_html():
     resp = client.get("/")
     assert resp.status_code == 200
     assert "VoiceHub" in resp.text
+
+
+# ---------- 配置读写 API（M6-③，必须走 HTTP 层验证路由签名） ----------
+
+def _make_settings(tmp_path):
+    from voicehub.settings import ConfigService
+
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "server": {"host": "127.0.0.1", "port": 8000},
+        "voicehub": {"stability_ms": 600, "pending_timeout_sec": 30},
+        "targets": {"laptop": {"name": "笔记本", "hotkey": "2", "type": "network_http"}},
+    }, ensure_ascii=False), encoding="utf-8")
+    return path, ConfigService(path)
+
+
+def test_api_config_get_roundtrip(tmp_path):
+    _, svc = _make_settings(tmp_path)
+    app = Dashboard(Config(), settings=svc).build_app()
+    resp = TestClient(app).get("/api/config")
+    assert resp.status_code == 200
+    assert resp.json()["voicehub"]["stability_ms"] == 600
+
+
+def test_api_config_put_ok(tmp_path):
+    path, svc = _make_settings(tmp_path)
+    app = Dashboard(Config(), settings=svc).build_app()
+    raw = svc.get()
+    raw["voicehub"]["stability_ms"] = 300
+    resp = TestClient(app).put("/api/config", json=raw)
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert resp.json()["need_restart"] is False
+    assert json.loads(path.read_text(encoding="utf-8"))["voicehub"]["stability_ms"] == 300
+
+
+def test_api_config_put_invalid_returns_400(tmp_path):
+    _, svc = _make_settings(tmp_path)
+    app = Dashboard(Config(), settings=svc).build_app()
+    raw = svc.get()
+    raw["voicehub"]["stability_ms"] = "abc"
+    resp = TestClient(app).put("/api/config", json=raw)
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+    assert "error" in resp.json()

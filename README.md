@@ -14,7 +14,8 @@ VoiceHub 守护进程按热键把文本一键注入台式机 / 笔记本 / 平�
 ```
 
 - **台式机（主控）**：全局热键（`keyboard`）、剪贴板监听（`WM_CLIPBOARDUPDATE` 事件驱动）、
-  设备发现（UDP 心跳 + 子网扫描兜底）、路由分发、SQLite 存储、Web 仪表盘（`127.0.0.1:8000`）、托盘。
+  设备发现（UDP 心跳 + 子网扫描兜底）、路由分发、SQLite 存储、Web 仪表盘（`127.0.0.1:8000`）、
+  托盘 + 原生窗口（pywebview）+ 可视化设置页 + 开机自启。
 - **笔记本 / 平板（接收端）**：HTTP 收文（端口 5050）→ 写本机剪贴板 → 模拟 `Ctrl+V` 粘贴；
   每 4 秒向子网广播 UDP 心跳（端口 9898）供主控自动发现。
 
@@ -33,8 +34,14 @@ voicehub/
 ├── receiver.py           # 笔记本/桌面接收端
 ├── tablet_server.py      # 平板 Termux 接收端（纯标准库 + Root 粘贴）
 ├── storage.py            # SQLite（transcript_logs）
-└── web.py                # Web 仪表盘（FastAPI + WebSocket）
+├── app_window.py         # pywebview 原生窗口（关窗不退程序）
+├── settings.py           # config 读写服务（校验/原子写回/热应用）
+├── paths.py              # frozen/源码双模式路径锚定
+└── web.py                # Web 仪表盘（FastAPI + WebSocket + 设置页）
 tests/                    # pytest 测试
+packaging/                # PyInstaller spec + 构建脚本（daemon/receiver exe）
+scripts/                  # 图标生成等工具
+assets/                   # 应用图标
 config.json               # 运行配置
 ```
 
@@ -51,6 +58,17 @@ Windows 专属依赖（keyboard / pywin32 / pystray / Pillow）已在 requiremen
 Windows 下安装即用；非 Windows 环境自动跳过。
 
 ## 使用
+
+**方式一：打包版（免 Python 环境，推荐）**
+
+从 [Releases](../../releases) 下载 zip（CI 自动构建），解压后：
+
+- 台式机：双击 `VoiceHub.exe`（托盘常驻 + 原生窗口仪表盘；`config.json` 在同目录可直接编辑，
+  也可在仪表盘「设置」页改；托盘可勾选开机自启）。日志在 `logs\voicehub.log`。
+- 笔记本：双击 `VoiceHubReceiver.exe`（默认名称 `laptop`；与 config 的 target key 不同时，
+  给快捷方式加参数 `--name <key>`）。
+
+**方式二：源码运行**
 
 **1. 笔记本启动接收端**（`--name` 需与 config.json 的 target key 一致）：
 
@@ -94,7 +112,16 @@ python -m voicehub.main
 ## 开发
 
 ```bash
-python -m pytest
+python -m pytest          # 单元测试
+packaging\build_daemon.bat     # 构建主控 exe → dist\VoiceHub\
+packaging\build_receiver.bat   # 构建接收端 exe → dist\VoiceHubReceiver\
+python scripts/make_icon.py    # 重新生成应用图标 assets/voicehub.ico
 ```
 
+CI（GitHub Actions）在 push / PR 时自动跑测试并构建双 exe，打 `v*` tag 发布 Release。
+
 文档：[PLAN.md](./PLAN.md)（规划与 ADR）· [TASKS.md](./TASKS.md)（任务）· [docs/PRD.md](./docs/PRD.md)（需求）· [CLAUDE.md](./CLAUDE.md)（工作规范）
+
+## License
+
+[MIT](./LICENSE)

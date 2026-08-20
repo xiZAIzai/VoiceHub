@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import threading
 import time
 import webbrowser
@@ -191,14 +193,30 @@ def run_tray(components, stop_event: threading.Event) -> None:
     """启动托盘（非阻塞）：后台线程跑图标，「退出」菜单触发 stop_event + stop。"""
     import pystray  # 仅 Windows
 
+    from . import app_window
+
     config = components.config
 
     def _exit(icon, item):
         stop_event.set()
         icon.stop()
 
+    def _open_main(icon, item):
+        """打开主窗口：原生窗口优先，未启用/已销毁则回退系统浏览器。"""
+        if not app_window.show_main_window():
+            _open_dashboard(config)
+
+    def _toggle_autostart(icon, item):
+        """托盘开关开机自启：按当前注册状态取反（M6-⑤）。"""
+        if is_autostart_enabled():
+            remove_autostart()
+        else:
+            install_autostart()
+
     menu = pystray.Menu(
-        pystray.MenuItem("打开仪表盘", lambda icon, item: _open_dashboard(config)),
+        pystray.MenuItem("打开主窗口", _open_main),
+        pystray.MenuItem("开机自启", _toggle_autostart,
+                         checked=lambda item: is_autostart_enabled()),
         pystray.MenuItem("退出", _exit),
     )
     icon = pystray.Icon("voicehub", _make_tray_icon(), "VoiceHub", menu)
@@ -207,24 +225,62 @@ def run_tray(components, stop_event: threading.Event) -> None:
 
 
 # ---------- 自启 ----------
-def install_autostart() -> bool:
-    """写入 HKCU Run 键实现开机自启。"""
-    import sys
+_AUTOSTART_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_VALUE_NAME = "VoiceHub"
+
+
+def _autostart_command() -> str:
+    """构造自启命令：打包运行直接启 exe，源码运行用 -m voicehub.main。
+
+    frozen 下带 -m 会导致 exe argparse 报错退出（exe 不认识该参数），必须区分。
+    """
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}"'
+    return f'"{sys.executable}" -m voicehub.main'
+
+
+def is_autostart_enabled() -> bool:
+    """查询 HKCU Run 键里是否已注册 VoiceHub 自启。"""
     import winreg
 
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                         r"Software\Microsoft\Windows\CurrentVersion\Run",
-                         0, winreg.KEY_SET_VALUE)
     try:
-        winreg.SetValueEx(key, "VoiceHub", 0, winreg.REG_SZ,
-                          f'"{sys.executable}" -m voicehub.main')
-    finally:
-        winreg.CloseKey(key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_RUN_KEY) as key:
+            winreg.QueryValueEx(key, _AUTOSTART_VALUE_NAME)
+            return True
+    except OSError:
+        return False
+
+
+def install_autostart() -> bool:
+    """写入 HKCU Run 键实现开机自启。"""
+    import winreg
+
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_RUN_KEY,
+                        0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, _AUTOSTART_VALUE_NAME, 0, winreg.REG_SZ,
+                          _autostart_command())
+    logger.info("开机自启已注册: %s", _autostart_command())
+    return True
+
+
+def remove_autostart() -> bool:
+    """删除 HKCU Run 键里的自启注册（未注册时静默成功）。"""
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_RUN_KEY,
+                            0, winreg.KEY_SET_VALUE) as key:
+            winreg.DeleteValue(key, _AUTOSTART_VALUE_NAME)
+    except FileNotFoundError:
+        pass
+    logger.info("开机自启已移除")
     return True
 
 
 def start_windows_backend(components) -> None:
-    """Windows 后端总入口：热键 + 剪贴板监听 + 托盘（主线程等退出信号）。"""
+    """Windows 后端总入口：热键 + 剪贴板监听 + 托盘 + 原生主窗口（主线程）。"""
+    from . import app_window
+
     hotkeys = HotkeyBackend()
     hotkeys.register_all(components)
 
@@ -234,9 +290,16 @@ def start_windows_backend(components) -> None:
     stop_event = threading.Event()
     try:
         run_tray(components, stop_event)
-        # 主线程可中断地等待退出：托盘「退出」设 stop_event，或 Ctrl+C 抛 KeyboardInterrupt
-        while not stop_event.is_set():
-            time.sleep(0.5)
+        # 主线程优先跑原生窗口（M6-④）：阻塞至托盘退出；关窗仅隐藏不退程序。
+        # pywebview 不可用/启动失败时回退原等待循环（托盘/热键照常）。
+        url = f"http://{components.config.server_host}:{components.config.server_port}"
+        if not app_window.wait_for_port(components.config.server_host,
+                                        components.config.server_port, timeout=5.0):
+            logger.warning("仪表盘端口 %.0f 就绪超时，窗口可能白屏",
+                           components.config.server_port)
+        if not app_window.start_app_window(url, stop_event):
+            while not stop_event.is_set():
+                time.sleep(0.5)
     except KeyboardInterrupt:
         logger.info("收到 Ctrl+C，正在退出")
     finally:
@@ -244,4 +307,19 @@ def start_windows_backend(components) -> None:
         hotkeys.unregister_all()
         components.discovery.stop()
         components.storage.close()
-        logger.info("VoiceHub 已退出")
+        _exit_forcefully_if_threads_linger()
+
+
+def _exit_forcefully_if_threads_linger() -> None:
+    """清理后若仍有非 daemon 线程驻留（pywebview/pythonnet/pystray 会留），
+    进程无法自然退出 → 记录线程名后强制结束（资源已在调用方关闭）。
+
+    2026-08-20 白屏事故伴生问题：托盘退出后进程变僵尸驻留，占着下一次启动的端口。
+    """
+    linger = [t.name for t in threading.enumerate()
+              if t is not threading.main_thread() and not t.daemon]
+    logger.info("VoiceHub 已退出")
+    if linger:
+        logger.info("残留非 daemon 线程 %s，强制结束进程", linger)
+        logging.shutdown()
+        os._exit(0)

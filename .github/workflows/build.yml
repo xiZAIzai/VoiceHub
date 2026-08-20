@@ -1,0 +1,54 @@
+# CI：单测 + Windows 双 exe 构建（M6-⑥ 开源工程化）
+# - push/PR：跑测试 + 构建，产物上传 artifact（Actions 页可下载）
+# - 打 tag（v*）：额外把 zip 附件发布到 GitHub Releases
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 单元测试
+        run: python -m pytest -q
+
+      - name: 构建主控 daemon exe
+        run: packaging\build_daemon.bat
+        shell: cmd
+
+      - name: 构建接收端 receiver exe
+        run: packaging\build_receiver.bat
+        shell: cmd
+
+      - name: 打包 zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/VoiceHub -DestinationPath dist/VoiceHub-windows-x64.zip
+          Compress-Archive -Path dist/VoiceHubReceiver -DestinationPath dist/VoiceHubReceiver-windows-x64.zip
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/*.zip
+          retention-days: 14
+
+      - name: 发布 Release（仅 tag）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip

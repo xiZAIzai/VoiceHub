@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from .clipboard_monitor import ClipboardMonitor, win32_read_text
@@ -21,6 +23,8 @@ from .config import Config
 from .discovery import Discovery
 from .hotkey import HotkeyRegistry
 from .orchestrator import Orchestrator
+from .paths import app_dir, default_config_path, resolve_data_path
+from .settings import ConfigService
 from .router import Router
 from .state import StickyTarget
 from .storage import Storage
@@ -45,10 +49,13 @@ class Components:
     dashboard: Dashboard
 
 
-def build_components(config_path: str = "config.json") -> Components:
+def build_components(config_path: str | Path = "config.json") -> Components:
     """加载配置并组装全部组件，绑定热键/剪贴板/路由/仪表盘。"""
+    config_path = Path(config_path)
     config = Config.load(config_path)
-    storage = Storage(config.db_path, retention_days=config.retention_days)
+    # db 相对路径锚定 config 所在目录：exe 模式下 CWD 不可靠（M6 打包需求）
+    db_path = resolve_data_path(config.db_path, base_dir=config_path.parent)
+    storage = Storage(db_path, retention_days=config.retention_days)
     discovery = Discovery(
         receiver_port=config.receiver_port,
         offline_timeout_sec=config.offline_timeout_sec,
@@ -76,7 +83,10 @@ def build_components(config_path: str = "config.json") -> Components:
         pending_timeout_sec=config.pending_timeout_sec,
     )
     orchestrator = Orchestrator(config, sticky, monitor, router)
-    dashboard = Dashboard(config, storage, sticky, discovery, hotkeys)
+    # 设置页（M6-③）：config.json 唯一写入方，去抖/超时参数可热应用
+    config_service = ConfigService(config_path, monitor=monitor, sticky=sticky)
+    dashboard = Dashboard(config, storage, sticky, discovery, hotkeys,
+                          settings=config_service)
 
     # 注册目标热键：热键回调 → 编排层 select_target
     for key, target in config.targets.items():
@@ -90,11 +100,21 @@ def build_components(config_path: str = "config.json") -> Components:
 
 
 def run_web(config: Config, dashboard: Dashboard) -> None:
-    """启动 FastAPI 仪表盘（阻塞当前线程）。"""
+    """启动 FastAPI 仪表盘（阻塞当前线程）。
+
+    - log_config=None：不让 uvicorn 走自己的 dictConfig（其 ColourizedFormatter
+      调 sys.stdout.isatty()，无控制台时崩溃），日志统一走根 logger（文件）。
+    - 线程内异常必须落日志：dashboard 线程死掉 = 仪表盘白屏"无法访问"，
+      静默死亡是事故（2026-08-20 白屏事故根因之一）。
+    """
     import uvicorn
 
-    uvicorn.run(dashboard.build_app(), host=config.server_host,
-                port=config.server_port, log_level="warning")
+    try:
+        uvicorn.run(dashboard.build_app(), host=config.server_host,
+                    port=config.server_port, log_level="warning",
+                    log_config=None)
+    except Exception:  # noqa: BLE001 - dashboard 线程死亡必须可见
+        logger.exception("仪表盘线程异常退出（端口 %s）", config.server_port)
 
 
 def run_windows_backend(components: Components) -> None:
@@ -104,16 +124,41 @@ def run_windows_backend(components: Components) -> None:
     start_windows_backend(components)
 
 
+def _setup_logging() -> None:
+    """日志初始化：源码运行输出到控制台；打包（frozen/windowed）落 exe 目录日志文件。
+
+    windowed exe 双击启动时无控制台句柄，sys.stdout/stderr 为 None —— 任何库
+    调 isatty()/fileno() 都会 AttributeError（实测 uvicorn 的 ColourizedFormatter
+    因此崩溃，dashboard 线程静默死亡 → 窗口白屏"无法访问"）。这里先用 devnull
+    兜底再初始化日志。
+    """
+    fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    if getattr(sys, "frozen", False):
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, "w", encoding="utf-8")
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w", encoding="utf-8")
+        # 日志写文件，方便排查问题
+        log_dir = app_dir() / "logs"
+        log_dir.mkdir(exist_ok=True)
+        logging.basicConfig(level=logging.INFO, format=fmt,
+                            handlers=[logging.FileHandler(
+                                log_dir / "voicehub.log", encoding="utf-8")])
+    else:
+        logging.basicConfig(level=logging.INFO, format=fmt)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    _setup_logging()
     parser = argparse.ArgumentParser(description="VoiceHub 语音转写多设备分发")
-    parser.add_argument("--config", default="config.json", help="config.json 路径")
+    parser.add_argument("--config", default=None,
+                        help="config.json 路径（默认：exe 目录 / 当前目录下 config.json）")
     parser.add_argument("--no-web", action="store_true", help="不启动仪表盘（仅 CLI）")
     args = parser.parse_args(argv)
+    config_path = args.config if args.config else default_config_path()
 
     try:
-        components = build_components(args.config)
+        components = build_components(config_path)
     except Exception as e:  # noqa: BLE001 - 组装失败要显式上报
         logger.error("组装失败: %s", e)
         return 1

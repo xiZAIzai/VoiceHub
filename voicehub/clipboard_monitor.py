@@ -54,6 +54,15 @@ class ClipboardMonitor:
         with self._lock:
             self._armed = False
 
+    def apply_params(self, stability_ms: Optional[float] = None,
+                     pending_timeout_sec: Optional[float] = None) -> None:
+        """设置页热应用入口（M6-③）：只更新传入的参数，None 表示不变。"""
+        with self._lock:
+            if stability_ms is not None:
+                self._stability_sec = stability_ms / 1000.0
+            if pending_timeout_sec is not None:
+                self._pending_timeout = pending_timeout_sec
+
     def is_armed(self) -> bool:
         with self._lock:
             return self._armed

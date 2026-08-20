@@ -112,7 +112,15 @@ python -m pytest
 
 ---
 
-## 5 TASKS.md 归档规则
+## 5 TASKS.md 记录与归档规则
+
+### 5.1 任务记录纪律（执行任务时必须遵循）
+
+1. **CLAUDE.md 是最高工作规范，不是记录文档**：未经用户明确要求，不得写入或修改 CLAUDE.md 的任何内容。过程与结果一律记录到 TASKS.md / PLAN.md。
+2. **问题挂在原任务条目下**：执行某个规划内任务时临时遇到的问题、临时修复、经验教训，一律以「进展/修复注释」形式追加记录在**该任务条目下方**，不得因为遇到新问题就另立新任务条目。
+3. **新建任务的唯一标准**：只有确属新规划的、不属于任何现有任务范围的工作，才在对应里程碑下新建任务条目；规划内任务执行中临时冒出来的问题不算新任务。
+
+### 5.2 归档触发条件
 
 满足以下任一条件时，必须执行归档：
 1. **里程碑完成** — PLAN.md 中某个 Milestone 全部完成
@@ -120,7 +128,8 @@ python -m pytest
 3. **任务过多** — 已完成任务超过 30 条
 4. **手动触发** — 用户明确要求归档
 
-归档步骤：
+### 5.3 归档步骤
+
 1. 创建归档文件：`docs/tasks-archive/milestone-X-completed.md`
 2. 将已完成任务移入归档文件
 3. 清理 TASKS.md，仅保留未完成任务
@@ -150,6 +159,7 @@ python -m pytest
 ## 7 Troubleshooting（踩坑记录）
 
 记录已修复的典型问题和设计约束，防止同类问题再次出现。随开发推进持续补充。
+**本节条目的新增与修改必须经用户明确要求，助手不得自行写入**（见 §5.1 规则 1）。
 
 1. **ctypes 64 位句柄溢出**：Win32 句柄（HWND/HINSTANCE/HMODULE）是 64 位，但 ctypes 未声明函数签名时会默认按 32 位 int 转换，导致 `OverflowError: int too long to convert`。解决：为所有用到的 user32/kernel32 函数显式声明 `argtypes`/`restype`，句柄参数用 `wintypes.HANDLE/HWND/HINSTANCE/HMODULE`（均 c_void_p）。注意 `ctypes.wintypes` **没有 `LRESULT`**，用 `LRESULT == wintypes.LPARAM`（== LONG_PTR）代替。
 

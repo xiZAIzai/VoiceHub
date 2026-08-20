@@ -1,15 +1,20 @@
 @echo off
 rem Build VoiceHub receiver exe (one-dir): output dist\VoiceHubReceiver\VoiceHubReceiver.exe
-rem Usage: run packaging\build_receiver.bat from repo root (ASCII-only for cmd compat)
+rem Works locally (repo .venv) and on CI (system python). ASCII-only for cmd compat.
 setlocal
 cd /d %~dp0..
 
-if not exist .venv\Scripts\pyinstaller.exe (
-  echo [ERROR] .venv\Scripts\pyinstaller.exe not found. Run: pip install -r requirements.txt
+rem Pick python: repo venv if present, else system python (CI)
+set PY=python
+if exist .venv\Scripts\python.exe set PY=.venv\Scripts\python.exe
+
+%PY% -m PyInstaller --version >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] PyInstaller not found. Run: pip install -r requirements.txt
   exit /b 1
 )
 
-.venv\Scripts\pyinstaller.exe packaging\voicehub-receiver.spec --noconfirm --distpath dist --workpath build
+%PY% -m PyInstaller packaging\voicehub-receiver.spec --noconfirm --distpath dist --workpath build
 if errorlevel 1 (
   echo [ERROR] PyInstaller build failed
   exit /b 1

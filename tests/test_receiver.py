@@ -35,6 +35,34 @@ def test_handle_paste_empty():
     assert r.handle_paste({"text": ""})["ok"] is False
 
 
+def test_paste_endpoint_http_layer():
+    """回归测试：POST /paste 必须走 HTTP 层接受 JSON body。
+
+    曾因 from __future__ import annotations + Request 在 make_app 内延迟导入，
+    注解解析失败导致 req 被当成 query 参数，POST 恒 422（详见 CLAUDE.md 踩坑 3）。
+    """
+    from fastapi.testclient import TestClient
+
+    calls = {}
+
+    def set_text(t: str) -> bool:
+        calls["set"] = t
+        return True
+
+    def paste() -> bool:
+        return True
+
+    r = Receiver("laptop", set_text=set_text, paste=paste)
+    client = TestClient(r.make_app())
+    resp = client.post("/paste", json={"text": "你好 world"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ok"] is True
+    assert calls["set"] == "你好 world"
+
+    # /health 也顺带验证
+    assert client.get("/health").json()["device"] == "laptop"
+
+
 def test_handle_paste_clipboard_fail():
     r = Receiver("laptop", set_text=lambda t: False, paste=lambda: True)
     assert r.handle_paste({"text": "x"})["ok"] is False

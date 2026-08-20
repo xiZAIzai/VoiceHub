@@ -21,6 +21,15 @@ from typing import Callable, Optional
 from .config import DISCOVERY_PORT, HEARTBEAT_SVC, RECEIVER_PORT
 from .discovery import own_ip
 
+# fastapi 必须在模块级导入：本文件有 from __future__ import annotations，
+# 路由函数的 `req: Request` 注解是字符串，FastAPI 经 get_type_hints 在模块全局
+# 解析；若在 make_app 内延迟导入，解析不到会被当成 query 参数，POST /paste 恒 422。
+# Termux 平板复用本模块的心跳函数但不装 fastapi，故 try-import 回退为 None。
+try:
+    from fastapi import FastAPI, Request
+except ImportError:  # pragma: no cover - 仅无 fastapi 的平板环境走到
+    FastAPI = Request = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,8 +176,9 @@ class Receiver:
         return {"ok": True, "length": len(text), "device": self.name}
 
     def make_app(self):
-        """构造 FastAPI 应用（延迟 import，避免非服务环境安装开销）。"""
-        from fastapi import FastAPI, Request
+        """构造 FastAPI 应用（fastapi 缺失说明是平板等纯标准库环境，显式报错）。"""
+        if FastAPI is None:
+            raise RuntimeError("当前环境未安装 fastapi，无法启动接收端 HTTP 服务")
 
         app = FastAPI(title=f"VoiceHub receiver {self.name}")
 

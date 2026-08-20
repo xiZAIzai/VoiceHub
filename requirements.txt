@@ -1,4 +1,4 @@
-# VoiceHub 依赖
+﻿# VoiceHub 依赖
 # 纯逻辑与 Web 部分跨平台；Windows 专属依赖用 sys_platform 标记，避免污染非 Windows 环境
 fastapi>=0.110
 uvicorn[standard]>=0.29

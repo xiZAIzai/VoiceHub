@@ -39,6 +39,8 @@
 
 - [x] 【前置决策】热键耦合方案定案 → **方案B 粘滞目标（零侵入）**，见 PLAN.md ADR-1。
   **完成时间**: 2026-08-19
+- [x] 搭建 Windows 主控机原生环境：Python 3.11 venv + 全量依赖（含 Windows 专属）+ 66 单测全绿 + daemon 冒烟启动（真机首次验证通过）。
+  **完成时间**: 2026-08-20
 - [ ] 闪电说完成模型配置（SenseVoice/Whisper + DeepSeek），验证 Alt tap-toggle 转录可用性。
 - [x] 【前置决策】网络方案定案 → **UDP 心跳 + 子网扫描兜底（自动发现）**，见 PLAN.md ADR-2。
   **完成时间**: 2026-08-19
@@ -53,6 +55,9 @@
 - [x] 编写平板 Termux 接收端 `tablet_server.py`（纯标准库 HTTP + root 粘贴）。
   **完成时间**: 2026-08-19
 - [ ] 真机运行笔记本接收端，验证局域网 POST 自动打字（需 Windows/macOS/Linux 真机）。
+  - 进展（2026-08-20）：接收端已在笔记本真机跑通心跳（daemon 侧 laptop online，192.168.81.182:5050）。
+  - 修复（2026-08-20）：联调发现 POST /paste 恒 422 —— `from __future__ import annotations` 下 `req: Request` 注解为字符串，FastAPI 经 get_type_hints 在模块全局解析，而 `Request` 在 `make_app()` 内延迟导入不可见，被误判为必填 query 参数。已改为模块级 try-import（Termux 环境回退 None），并补 TestClient HTTP 层回归测试（67 单测全绿）。教训：路由处理函数必须有走 HTTP 层的测试，只直调处理函数测不出接线问题。
+  - 待办：修复后的 receiver.py 同步到笔记本重启，验证 POST 200 与自动粘贴。
 - [ ] 平板 Termux 部署 + Root 粘贴 + 后台保活（需 Termux 真机）。
 
 ## M3 台式机主控服务（🔶 代码完成，Windows 真机验证待做）
@@ -74,6 +79,7 @@
 - [x] 集成 SQLite 数据库读写引擎 `storage.py`（transcript_logs 表）。
   **完成时间**: 2026-08-19
 - [ ] Windows 真机验证：热键 hook、WM_CLIPBOARDUPDATE、托盘（需 Windows Python）。
+  - 进展（2026-08-20）：daemon 冒烟启动通过 —— alt+1/2/3 热键注册、WM_CLIPBOARDUPDATE 监听、托盘、仪表盘 `/api/state` HTTP 200 均正常；交互式全链路验证（实按 Alt+N → 闪电说 → 路由）待做。
 
 ## M4 Web 仪表盘（🔶 代码完成，浏览器联调待做）
 

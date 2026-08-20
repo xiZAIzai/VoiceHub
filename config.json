@@ -1,0 +1,19 @@
+{
+  "server": { "host": "127.0.0.1", "port": 8000 },
+  "voicehub": {
+    "pending_timeout_sec": 30,
+    "stability_ms": 600,
+    "heartbeat_interval_sec": 4,
+    "offline_timeout_sec": 12,
+    "scan_interval_sec": 20,
+    "discovery_port": 9898,
+    "receiver_port": 5050
+  },
+  "shandianshuo": { "trigger_key": "alt" },
+  "targets": {
+    "desktop": { "name": "主力台式机", "hotkey": "1", "type": "local" },
+    "laptop": { "name": "便携笔记本", "hotkey": "2", "type": "network_http" },
+    "tablet": { "name": "Root 安卓平板", "hotkey": "3", "type": "network_http" }
+  },
+  "storage": { "db_path": "voice_memory.db", "retention_days": 90 }
+}

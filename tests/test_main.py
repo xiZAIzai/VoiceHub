@@ -2,6 +2,7 @@
 import json
 
 from voicehub.main import build_components
+from voicehub.transport import HttpPusher
 
 
 def _write_config(tmp_path):
@@ -28,6 +29,8 @@ def test_build_components_assembles_all(tmp_path):
     assert c.sticky is not None
     assert c.monitor is not None
     assert c.router is not None
+    # 回归：曾漏注入 transport，导致 daemon 内所有远程路由恒失败（no transport）
+    assert isinstance(c.router._transport, HttpPusher)
     assert c.orchestrator is not None
     assert c.dashboard is not None
     c.storage.close()

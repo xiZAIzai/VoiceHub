@@ -24,6 +24,7 @@ from .orchestrator import Orchestrator
 from .router import Router
 from .state import StickyTarget
 from .storage import Storage
+from .transport import HttpPusher
 from .web import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,8 @@ def build_components(config_path: str = "config.json") -> Components:
         discovery_port=config.discovery_port,
     )
     sticky = StickyTarget(pending_timeout_sec=config.pending_timeout_sec)
-    router = Router(config, discovery=discovery, storage=storage)
+    # transport 必须注入：Router 不带 transport 时所有远程路由都会以 "no transport" 失败
+    router = Router(config, discovery=discovery, transport=HttpPusher(), storage=storage)
     hotkeys = HotkeyRegistry()
 
     # 剪贴板监控：Windows 读 win32 剪贴板，其他平台用空实现（不可用即不监听）

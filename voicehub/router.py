@@ -53,6 +53,9 @@ class Router:
             return self._finish(target_key, False, "unknown target", text, raw_text, latency_ms)
 
         ok, error = self._dispatch(target, text)
+        if not ok:
+            # 诊断日志：路由失败原因必须可见（如 no transport / target offline / push failed）
+            logger.warning("路由失败: target=%s error=%s", target_key, error)
         result = self._finish(target_key, ok, error, text, raw_text, latency_ms, target, metadata)
         result["elapsed_ms"] = int((self._now() - started) * 1000)
         return result

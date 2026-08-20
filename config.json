@@ -1,8 +1,8 @@
 {
   "server": { "host": "127.0.0.1", "port": 8000 },
   "voicehub": {
-    "pending_timeout_sec": 30,
-    "stability_ms": 600,
+    "pending_timeout_sec": 300,
+    "stability_ms": 300,
     "heartbeat_interval_sec": 4,
     "offline_timeout_sec": 12,
     "scan_interval_sec": 20,

@@ -10,6 +10,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 发 Release 需要 contents 写权限（默认 GITHUB_TOKEN 只读，首跑曾因此 403）
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest

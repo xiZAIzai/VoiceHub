@@ -1,14 +1,41 @@
 # VoiceHub 任务清单
 
-> 最后更新：2026-08-19（M0 奠基；ADR-1~5 已定案；ADR-2 修订为自动发现；ESP32 挂起）
-> 当前焦点：M1 环境与 API 校验
+> 最后更新：2026-08-19（第一版代码完成：v1 骨架 65 单测全绿；M2-M4 代码就绪，真机验证待做）
+> 当前焦点：Windows 真机验证（M1 前置 + M2/M3 部署联调）
+
+## v1 代码实现（✅ 2026-08-19，长城任务）
+
+- [x] 项目脚手架与配置模块 `config.py` + `config.json`。
+  **完成时间**: 2026-08-19
+- [x] SQLite 存储引擎 `storage.py`（transcript_logs 表 + WAL）。
+  **完成时间**: 2026-08-19
+- [x] 设备发现 `discovery.py`（UDP 心跳 + 在线表 + 子网扫描兜底，ADR-2）。
+  **完成时间**: 2026-08-19
+- [x] 笔记本/桌面接收端 `receiver.py`（HTTP 收文 + 心跳广播 + 平台粘贴后端）。
+  **完成时间**: 2026-08-19
+- [x] 平板 Termux 接收端 `tablet_server.py`（纯标准库 HTTP + root 粘贴）。
+  **完成时间**: 2026-08-19
+- [x] 粘滞目标状态机 `state.py`（ADR-1）。
+  **完成时间**: 2026-08-19
+- [x] 剪贴板监控 `clipboard_monitor.py`（事件驱动 + 基线/去抖/过期，ADR-4）。
+  **完成时间**: 2026-08-19
+- [x] 全局热键注册表 `hotkey.py` + Windows 后端 `win_backend.py`（热键/剪贴板/托盘/自启）。
+  **完成时间**: 2026-08-19
+- [x] 路由编排 `router.py` + 传输层 `transport.py`（本地记录 / HTTP 推送）。
+  **完成时间**: 2026-08-19
+- [x] Web 仪表盘 `web.py`（FastAPI 单文件 HTML + WebSocket，ADR-3）。
+  **完成时间**: 2026-08-19
+- [x] 主入口 `main.py` + 编排层 `orchestrator.py`（单向数据流组装）。
+  **完成时间**: 2026-08-19
+- [x] README 运行指引 + requirements 补齐（httpx）。
+  **完成时间**: 2026-08-19
 
 ## M0 记录结构与规划奠基（✅ 2026-08-19）
 
 - [x] 建立规划/记录结构：CLAUDE.md（工作规范）、PLAN.md（规划）、TASKS.md（本文件）、docs/PRD.md（需求文档）、.gitignore。
   **完成时间**: 2026-08-19
 
-## M1 环境与 API 校验（⬜ 未启动）
+## M1 环境与 API 校验（🔶 前置决策完成，真机验证待做）
 
 - [x] 【前置决策】热键耦合方案定案 → **方案B 粘滞目标（零侵入）**，见 PLAN.md ADR-1。
   **完成时间**: 2026-08-19
@@ -19,31 +46,50 @@
 - [ ] 热键验证：Alt+1/2/3/4 不透传前台应用（浏览器不切标签）。
 - [ ] 热键验证：Alt+N 组合不会误触闪电说录音（Alt 是闪电说触发键）。
 
-## M2 目标端接收服务部署（⬜ 未启动）
+## M2 目标端接收服务（🔶 代码完成，真机部署待做）
 
-- [ ] 编写并运行笔记本端 `laptop_receiver.py`（HTTP 接收 + UDP 报到广播），测试局域网 POST 请求自动打字。
-- [ ] 在平板 Termux 部署 `tablet_server.py`（HTTP 接收 + UDP 报到广播），赋予 Root 权限并测试后台保活与粘贴。
+- [x] 编写笔记本/桌面接收端 `receiver.py`（HTTP 收文 + UDP 心跳广播 + 平台粘贴后端）。
+  **完成时间**: 2026-08-19
+- [x] 编写平板 Termux 接收端 `tablet_server.py`（纯标准库 HTTP + root 粘贴）。
+  **完成时间**: 2026-08-19
+- [ ] 真机运行笔记本接收端，验证局域网 POST 自动打字（需 Windows/macOS/Linux 真机）。
+- [ ] 平板 Termux 部署 + Root 粘贴 + 后台保活（需 Termux 真机）。
 
-## M3 台式机主控服务实现（⬜ 未启动）
+## M3 台式机主控服务（🔶 代码完成，Windows 真机验证待做）
 
 - [x] 【前置决策】转录完成判定定案 → **事件驱动 + 基线/去抖/过期**，见 PLAN.md ADR-4。
   **完成时间**: 2026-08-19
 - [x] 【前置决策】闪电说自动粘贴处理定案 → **保留原生，远程接受台式机重复**，见 PLAN.md ADR-5。
   **完成时间**: 2026-08-19
-- [ ] 实现全局热键组合监听（Alt+1/2/3/4 目标选择，粘滞语义见 ADR-1；台式机目标仅记录不注入）。
-- [ ] 实现剪贴板监听与文本提取管道（WM_CLIPBOARDUPDATE 事件驱动，见 ADR-4）。
-- [ ] 实现设备发现：监听 UDP 报到 + 维护在线设备表 + 子网扫描兜底（见 ADR-2）。
-- [ ] 集成 SQLite 数据库读写引擎（transcript_logs 表）。
+- [x] 实现粘滞目标状态机 `state.py`（Alt+1/2/3/4 目标选择，ADR-1）。
+  **完成时间**: 2026-08-19
+- [x] 实现剪贴板监听 `clipboard_monitor.py`（WM_CLIPBOARDUPDATE 事件驱动，ADR-4）。
+  **完成时间**: 2026-08-19
+- [x] 实现设备发现 `discovery.py`（UDP 报到 + 在线表 + 子网扫描兜底，ADR-2）。
+  **完成时间**: 2026-08-19
+- [x] 实现全局热键注册表 `hotkey.py` + Windows 后端 `win_backend.py`。
+  **完成时间**: 2026-08-19
+- [x] 实现路由编排 `router.py` + 传输层 `transport.py`。
+  **完成时间**: 2026-08-19
+- [x] 集成 SQLite 数据库读写引擎 `storage.py`（transcript_logs 表）。
+  **完成时间**: 2026-08-19
+- [ ] Windows 真机验证：热键 hook、WM_CLIPBOARDUPDATE、托盘（需 Windows Python）。
 
-## M4 Web 仪表盘与 WebSocket 联调（⬜ 未启动）
+## M4 Web 仪表盘（🔶 代码完成，浏览器联调待做）
 
-- [ ] 构建 FastAPI Web 服务与 WebSocket 广播通道。
-- [ ] 编写前端 Dashboard 页面（纯 Web：HTML+Vue，FastAPI 托管，见 PLAN.md ADR-3），打通实时状态同步与历史日志查看。
+- [x] 构建 FastAPI Web 服务 `web.py`（状态 API + WebSocket 推送）。
+  **完成时间**: 2026-08-19
+- [x] 编写前端 Dashboard（单文件 HTML：Tailwind + Vue CDN，ADR-3）。
+  **完成时间**: 2026-08-19
+- [ ] 浏览器联调：实时状态同步 + 历史日志查看（随 M3 真机一起验证）。
 
-## M5 体验调优与开机自启（⬜ 未启动）
+## M5 体验调优与开机自启（🔶 部分代码完成，真机调优待做）
 
-- [ ] 优化剪贴板读取防抖与延迟控制。
-- [ ] 配置台式机服务为 Windows 后台服务或托盘自启应用。
+- [x] 剪贴板去抖/过期参数化（`stability_ms` / `pending_timeout_sec` 进 config）。
+  **完成时间**: 2026-08-19
+- [x] Windows 托盘 + 自启代码（`win_backend.py`）。
+  **完成时间**: 2026-08-19
+- [ ] 真机调优：去抖时长、托盘自启实测。
 
 ## 维护规则
 

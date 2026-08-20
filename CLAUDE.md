@@ -151,4 +151,6 @@ python -m pytest
 
 记录已修复的典型问题和设计约束，防止同类问题再次出现。随开发推进持续补充。
 
-（暂无记录）
+1. **ctypes 64 位句柄溢出**：Win32 句柄（HWND/HINSTANCE/HMODULE）是 64 位，但 ctypes 未声明函数签名时会默认按 32 位 int 转换，导致 `OverflowError: int too long to convert`。解决：为所有用到的 user32/kernel32 函数显式声明 `argtypes`/`restype`，句柄参数用 `wintypes.HANDLE/HWND/HINSTANCE/HMODULE`（均 c_void_p）。注意 `ctypes.wintypes` **没有 `LRESULT`**，用 `LRESULT == wintypes.LPARAM`（== LONG_PTR）代替。
+
+2. **Win32 窗口线程亲和性（thread affinity）**：窗口在哪条线程创建，其消息（含 `PostMessage` 投递的 WM_CLIPBOARDUPDATE）就进哪条线程的队列；建窗线程和消息循环线程不一致会导致收不到异步消息（只收到建窗期间同步 SendMessage 的 WM_CREATE 等）。解决：把「注册类 + 建窗 + AddClipboardFormatListener + GetMessageW 消息循环」全部放进**同一条**线程函数，外部 stop 用跨线程 `PostMessage` 唤醒阻塞的 `GetMessageW`。

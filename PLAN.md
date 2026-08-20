@@ -1,7 +1,7 @@
 # VoiceHub 项目规划
 
-> 最后更新：2026-08-19（M0 奠基；ADR-1~5 已定案；ADR-2 修订为自动发现；ESP32 挂起）
-> 当前焦点：M1 环境与 API 校验
+> 最后更新：2026-08-19（v1 代码完成：65 单测全绿；M2-M4 代码就绪，真机验证待做）
+> 当前焦点：Windows 真机验证（M1 前置 + M2/M3 部署联调）
 
 ## 产品目标
 
@@ -13,8 +13,10 @@
 
 ## 当前状态
 
-- 全新项目（空仓库），尚无代码。
-- M0 记录结构已奠基：CLAUDE.md（工作规范）、PLAN.md（本文件）、TASKS.md（任务清单）、docs/PRD.md（需求文档）、.gitignore。
+- **v1 代码已完成**：核心包 `voicehub/` 全部模块就绪，65 个单测全绿（跨平台纯逻辑在 WSL 下验证）。
+- 架构分层落地：入口 / 编排 / 状态机 / 剪贴板 / 发现 / 路由 / 存储 / 接收端 / 仪表盘各司其职。
+- 待办：Windows 原生部分（全局热键、WM_CLIPBOARDUPDATE、托盘）需 Windows 真机验证；
+  笔记本 / 平板接收端需真机部署联调。
 
 当前主要风险：
 
@@ -30,39 +32,41 @@
 
 已建立 CLAUDE.md / PLAN.md / TASKS.md / docs/PRD.md / .gitignore。
 
-### ⬜ Milestone 1：环境与 API 校验（Phase 1）
+### 🔶 Milestone 1：环境与 API 校验（代码就绪，真机验证待做）
 
 - 闪电说完成模型配置（SenseVoice/Whisper + DeepSeek），验证 Alt tap-toggle 转录可用性。
 - 真机验证 ADR-2 前提：同一手机热点下多端互通、UDP 报到广播可被台式机收到（热点须允许客户端互访）。
 - 热键验证：Alt+1/2/3/4 不透传前台应用（浏览器不切标签）、且不误触闪电说录音。
 - 剪贴板验证：WM_CLIPBOARDUPDATE 事件在闪电说写入时可靠触发（ADR-4 前提）。
 
-### ⬜ Milestone 2：目标端接收服务部署（Phase 2）
+### 🔶 Milestone 2：目标端接收服务部署（代码就绪，真机部署待做）
 
-- 笔记本端 `laptop_receiver.py`，测试局域网 POST 请求自动打字。
-- 平板 Termux 部署 `tablet_server.py`，Root 粘贴与后台保活。
+- 笔记本端 `receiver.py` 已实现，待真机验证局域网 POST 自动打字。
+- 平板 Termux `tablet_server.py` 已实现，待 Root 粘贴与后台保活实测。
 
-### ⬜ Milestone 3：台式机主控服务实现（Phase 3）
+### 🔶 Milestone 3：台式机主控服务实现（代码就绪，Windows 真机验证待做）
 
 - 全局热键组合监听（Alt+1/2/3/4 目标选择，粘滞语义见 ADR-1）。
 - 剪贴板监听与文本提取管道（事件驱动，见 ADR-4）。
+- 设备发现（UDP 报到 + 子网扫描兜底，见 ADR-2）。
 - 集成 SQLite 数据库读写引擎（transcript_logs）。
 
-### ⬜ Milestone 4：Web 仪表盘与 WebSocket 联调（Phase 4）
+### 🔶 Milestone 4：Web 仪表盘与 WebSocket 联调（代码就绪，浏览器联调待做）
 
 - FastAPI Web 服务与 WebSocket 广播通道。
 - 前端 Dashboard（纯 Web 页面，见 ADR-3），打通实时状态同步与历史日志查看。
 
-### ⬜ Milestone 5：体验调优与开机自启（Phase 5）
+### 🔶 Milestone 5：体验调优与开机自启（部分代码就绪，真机调优待做）
 
-- 优化剪贴板读取防抖与延迟控制。
-- 配置台式机服务为 Windows 后台服务或托盘自启应用。
+- 剪贴板读取防抖与延迟控制（已参数化进 config）。
+- 配置台式机服务为 Windows 后台服务或托盘自启应用（代码已就绪）。
 
 ## 近阶段工作重点
 
 1. ~~M0 记录结构奠基~~ ✅ 2026-08-19。
-2. M1 环境与 API 校验：闪电说模型配置 + 设备网络规划。
-3. M2 目标端接收服务：先打通笔记本 → 平板，再回主控。
+2. ~~v1 代码实现（M2-M4 代码 + 编排/路由/存储/仪表盘）~~ ✅ 2026-08-19（65 单测全绿）。
+3. Windows 真机验证：装 Windows Python → 跑 `python -m voicehub.main` 验证热键/剪贴板/托盘。
+4. 真机联调：笔记本 + 平板接收端部署，验证自动发现 → 路由 → 粘贴。
 
 ## 架构约束（精简版）
 

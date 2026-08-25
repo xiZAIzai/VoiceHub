@@ -1,7 +1,7 @@
 # VoiceHub 任务清单
 
-> 最后更新：2026-08-25（**openKylin 实机随用随修第一轮完成**：SNI 托盘 / 热键打包修复 /
-> 端口避让；测试 106→110 + 本机 AppImage 全链路实测全绿；M9 仍随用随做）
+> 最后更新：2026-08-25 晚（**V4 立项：自建云端转写内核（ADR-9，M11–M13）**，任务已细化待开工；
+> 此前 openKylin 随用随修第一轮完成并已 push）
 > 已完成任务归档：[V1](./docs/tasks-archive/v1-completed.md) · [V2](./docs/tasks-archive/v2-completed.md)
 
 ## V3：Linux 双端适配（2026-08-20 立项，未启动）
@@ -84,12 +84,44 @@
   - 提交拆分（4 commits）：feat 主控后端 / feat 打包链 / docs 归档 / chore .gitattributes
     （强制 .sh LF，防 autocrlf 破坏 WSL 执行）。
 
-## V4（远期占位）：自建转写内核（2026-08-20 方向登记，未立项）
+## V4：自建转写内核·云端 ASR（2026-08-25 立项，M11 待开工）
 
-> 仅登记方向，核心内容未定，待 V3 收尾或中途再细化讨论，见 PLAN.md「V4（远期占位）」段。
-> 动机：摆脱对闪电说（闭源收费 / Pro 会员分层）的依赖，自主可控；核心：自建录音 → ASR →
-> LLM 润色内核，逻辑更流畅、配置可自定义；增值：记忆系统 + 项目管理系统接入，
-> 按项目隔离管理对话/转写历史。
+> 原「远期占位」升格立项（用户决策）。催化：闪电说 Linux 版在 openKylin UI 渲染 0 帧
+> 不可用 + glibc 基线过高（调查见 V3 章节），openKylin 语音链路单点依赖被打破。
+> **定案（ADR-9）**：ASR 统一走云（本地不做）；文本直通 orchestrator 不经剪贴板
+> （ADR-4/ADR-5 痛点天然免疫）；双引擎开关与闪电说共存；触发键独立；密钥不进种子 config。
+> 方向全景见 PLAN.md「V4」段；以下为可勾选执行明细。
+
+- [ ] **M11：最小闭环竖切**（录音 → 云 ASR → 直通路由，目标 2–4 个工作日）
+  - [ ] ① provider spike：候选云 ASR（OpenAI 兼容 `/v1/audio/transcriptions` 体系优先：
+    智谱 / 讯飞 / 火山 / Deepgram / Groq 等），同一组中文短句实测延迟/准确性/价格，
+    定默认 provider 与 config 默认值；产出对比记录（可脚本化 `scripts/spark_asr_providers.sh`）。
+  - [ ] ② config 扩展 `transcription` 段：engine（shandianshuo|builtin）/ provider /
+    base_url / model / language / 触发键 / VAD 参数；校验与原子写回沿 ConfigService；
+    密钥读环境变量（如 `VOICEHUB_ASR_API_KEY`）或 config.local.json，种子 config 不含密钥。
+  - [ ] ③ `recorder.py`：sounddevice 录音 + 纯逻辑状态机（idle→recording→processing，
+    TDD）；两种停止模式（再按一次停止 / VAD 静音自动停）；WAV/临时文件生命周期管理。
+  - [ ] ④ `asr_client.py`：httpx multipart 上传音频 → 文本；超时/重试/错误落日志；
+    Provider 抽象留适配位（非 OpenAI 兼容家可子类扩展）。
+  - [ ] ⑤ orchestrator 直通路径 `route_direct(text)`：消费粘滞目标或默认目标，
+    跳过剪贴板监听链路；落库字段标注 source=builtin（与闪电说来源区分）。
+  - [ ] ⑥ 触发双通道：托盘菜单「开始听写」（Wayland 无关兜底）+ pynput 独立热键
+    （候选右 Alt / Ctrl+Alt+V，实测定案写入 ADR-9 附录，避免与闪电说 Alt 耦合）。
+  - [ ] ⑦ 测试与冒烟：状态机/provider mock/config 校验单测；WSL/openKylin 冒烟
+    （真实麦克风 → API → 仪表盘落库 + 路由接收端）。
+  - [ ] ⑧ openKylin 实机验收：不装闪电说，完成一次语音 → 仪表盘可见记录 → 路由成功。
+- [ ] **M12：体验完善**（润色 / 状态可视化 / Wayland 稳触发）
+  - [ ] LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
+  - [ ] 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态。
+  - [ ] UKUI 系统快捷键 CLI：`--dictate` 子命令 + UKUI 设置指引（Wayland 最稳触发）。
+  - [ ] VAD 参数可调（静音阈值 / 最长时长 / 最短时长）。
+- [ ] **M13：工程化收尾 + v0.4.0**
+  - [ ] 打包：sounddevice/PortAudio 收编 AppImage；spec/CI 冒烟扩展（无麦克风 CI 跳过录音项）。
+  - [ ] Windows 侧可用性验证（引擎跨平台：sounddevice + 云 API）。
+  - [ ] README 双引擎章节（engine 开关 / 密钥配置 / 触发键说明）。
+  - [ ] 发 v0.4.0 Release（Windows 双 zip + Linux 双 AppImage）。
+
+> V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 
 ## V2 收尾（用户侧验证，随用随验）
 

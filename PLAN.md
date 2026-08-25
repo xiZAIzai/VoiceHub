@@ -1,8 +1,8 @@
 # VoiceHub 项目规划
 
-> 最后更新：2026-08-25（**openKylin 实机随用随修第一轮完成**：SNI 托盘补齐 / 热键打包
-> 修复 / 默认端口避让 8000；v0.3.0 AppImage 实测三个问题定位与修复，见 ADR-8）
-> 当前焦点：openKylin 侧实际使用验证（托盘/热键已通，闪电说全链路真机联调随用随修）；
+> 最后更新：2026-08-25 晚（**V4 立项：自建云端转写内核**，ASR 统一走云（ADR-9），M11 待开工；
+> 此前 openKylin 随用随修第一轮完成并已 push：SNI 托盘 / 热键打包修复 / 端口避让，见 ADR-8）
+> 当前焦点：**V4/M11 最小闭环竖切**（录音 → 云 ASR → 直通路由）；openKylin 随用随修继续；
 > V2 用户侧验证随用随验；V1 尾巴：平板部署
 
 ## 产品目标
@@ -40,6 +40,10 @@
   ③ Release AppImage 缺 `pynput.keyboard._xorg` 热键全灭——pynput≥1.8 import 期即连 X server，
   headless CI 上 `collect_submodules("pynput")` 静默返回空表，spec 改显式 hiddenimports + CI 加
   xvfb 冒烟断言。本机重打包 + 冒烟 + 托盘 DBus 实测全绿（110 单测）。
+- **V4 立项（2026-08-25 晚，用户决策）**：自建转写内核由远期占位**升格为正式里程碑**——催化事件：
+  闪电说 Linux 版（Tauri/GTK）在 openKylin（kylin-wlcom 合成器）UI 渲染 0 帧不可用且 glibc 2.39
+  基线过高（调查记录见 TASKS.md V3 章节），openKylin 语音链路单点依赖被打破。**ASR 统一走云**
+  （本地模型明确不做），选型与架构见 ADR-9，里程碑 M11–M13 见「当前里程碑」。
 
 当前主要风险：
 
@@ -145,27 +149,53 @@
 - ~~发 v0.3.0 Release~~ ✅ 2026-08-25（四产物：Windows 双 zip + Linux 双 AppImage，
   main 与 tag 流水线全绿）。
 
-### ⏳ V4（远期占位，未立项）：自建转写内核（2026-08-20 方向登记）
+### 🔶 V4：自建转写内核·云端 ASR（2026-08-25 立项，M11 待开工）
 
-> 仅登记方向，核心内容未定案，待 V3 收尾或中途再细化讨论。即 ADR-7 中"自建转写管道
-> 挂起的远期方向"，此处正式占位为 V4。
+> 原「远期占位」升格立项。选型定案见 ADR-9（ASR 统一云端 / 直通注入不经剪贴板 /
+> 双引擎开关与闪电说共存 / 触发键独立）。任务明细与勾选进度在 TASKS.md「V4」章节。
 
-- 动机：转写源依赖闪电说（闭源商业软件，收费 + Pro 会员分层），开源项目自主可控受制于人。
-- 核心：自建转写内核（录音 → ASR → LLM 润色 → 写剪贴板），核心逻辑比闪电说更流畅，
-  配置更完善、可自定义（闪电说现有配置较草率）。
-- 增值方向（依赖自建内核方可做）：接入记忆系统与项目管理系统，按项目隔离管理对话/转写历史。
-- 与 V3 的关系：V3（M7–M10）仍走闪电说零侵入路线，两者不冲突；自建内核落地时可引入
-  转写源抽象（shandianshuo | builtin）与闪电说平滑共存/切换。
+#### Milestone 11：最小闭环竖切（录音 → 云 ASR → 直通路由）
+
+- provider spike：候选云 ASR（OpenAI 兼容 `/v1/audio/transcriptions` 体系优先：
+  智谱 / 讯飞 / 火山 / Deepgram / Groq 等）各测中文短句，按延迟/准确性/价格定默认。
+- config `transcription` 段（engine / provider / base_url / model / language / VAD 参数）；
+  密钥走环境变量或 config.local.json（gitignore 已覆盖），种子 config 永不含密钥。
+- `recorder`（sounddevice + 纯逻辑状态机 idle→recording→processing，两种停止模式：
+  再按一次 / VAD 静音自动停）+ `asr_client`（httpx multipart 上传，超时/重试/错误落日志）。
+- orchestrator 直通路径 `route_direct(text)`：消费粘滞目标或默认目标，**跳过剪贴板链路**
+  （ADR-4 误判 / ADR-5 重复贴对内置引擎天然免疫）。
+- 触发：托盘菜单「开始听写」（Wayland 无关，最稳兜底）+ pynput 独立热键
+  （候选右 Alt / Ctrl+Alt+V，实测定案，避免与闪电说 Alt 耦合）。
+- 测试（状态机 / provider mock / config 校验）+ WSL 冒烟（真实麦克风 → API → 落库路由）；
+  openKylin 实机验收：不装闪电说完成一次语音 → 仪表盘可见 → 路由到接收端。
+
+#### Milestone 12：体验完善（润色 / 状态可视化 / Wayland 稳触发）
+
+- LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
+- 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态（WS 通道已有）。
+- UKUI 系统快捷键 CLI（`--dictate` 子命令 + UKUI 设置指引）：Wayland 下最稳触发方式。
+- VAD 参数可调（静音阈值 / 最长时长 / 最短时长）。
+
+#### Milestone 13：工程化收尾 + v0.4.0
+
+- 打包：sounddevice/PortAudio 收编进 AppImage；spec/CI 冒烟扩展（无麦克风的 CI 跳过录音项）。
+- Windows 侧可用性验证（引擎跨平台：sounddevice + 云 API，天然双平台）。
+- README 双引擎说明（engine 开关 / 密钥配置 / 触发键配置）；发 v0.4.0 Release。
+
+#### V4 增值方向（内核落地后启用）
+
+- 接入记忆系统与项目管理系统，按项目隔离管理对话/转写历史（原占位登记内容）。
 
 ## 近阶段工作重点
 
-1. ~~V3 先行项 / M7 选型 / M8 Linux 主控 / M10 AppImage + v0.3.0~~ ✅ 2026-08-20~25
-   （全链详见 TASKS.md V3 章节记录）。
-2. openKylin 侧实际使用：从 Release 下载 AppImage 直接用；闪电说 Linux 内测版配合，
-   差异随用随修（ADR-7 策略）。
-3. M9 接收端体验随用随做（systemd/自启脚本可选，AppImage 已是主交付形态）。
-4. V2 收尾用户侧验证随用随验（窗口三步 / 笔记本真链路 / 自启重启）。
-5. V1 尾巴（平板 Termux 部署）按需再启；V4（自建转写内核）方向已登记待议。
+1. **V4/M11 最小闭环竖切（当前最高优先）**：provider spike → 录音器/ASR 客户端 →
+   直通路由 → 双触发 → openKylin 实机验收（不装闪电说跑通一次语音）。明细见 TASKS.md V4。
+2. ~~V3 先行项 / M7 选型 / M8 Linux 主控 / M10 AppImage + v0.3.0~~ ✅ 2026-08-20~25
+   （全链详见 TASKS.md V3 章节记录；随用随修第一轮修复已 push）。
+3. openKylin 侧实际使用：VoiceHub 侧已通（托盘/热键/端口）；闪电说侧等官方修复
+   kylin-wlcom 渲染问题（glibc 侧载方案已就位，TASKS.md 有调查记录与反馈材料）。
+4. M9 接收端体验随用随做（systemd/自启脚本可选，AppImage 已是主交付形态）。
+5. V2 收尾用户侧验证随用随验（窗口三步 / 笔记本真链路 / 自启重启）；V1 尾巴按需再启。
 
 ## 架构约束（精简版）
 
@@ -266,6 +296,21 @@
   总线 / 无 jeepney 均降级日志不阻塞。开机自启（.desktop）留作后续项。
   同轮关联修复：默认端口 8000→8765（避让 Triton/kytensor）；pynput 打包改显式
   hiddenimports（headless CI 上 collect_submodules 静默拿空表的事故，ADR-7 工具链层）。
+
+- **ADR-9 自建转写内核：云端 ASR + 直通注入 + 双引擎开关（2026-08-25 定案）**
+  决策背景：闪电说 Linux 版（Tauri/GTK）在 openKylin（kylin-wlcom）UI 渲染 0 帧不可用、
+  glibc 2.39 基线过高（调查见 TASKS.md V3），语音链路单点依赖被打破，V4 由远期占位升格立项。
+  - **ASR 统一走云**（用户决策 2026-08-25；本地模型明确不做）：优先 OpenAI 兼容
+    `/v1/audio/transcriptions` 接口体系（智谱/讯飞/火山/Deepgram/Groq 等易适配），
+    provider 可配，M11 spike 实测定默认。
+  - **直通注入**：内置引擎转写文本走 `orchestrator.route_direct()`，不经剪贴板——
+    ADR-4 武装期误判、ADR-5 本地重复贴对内置引擎天然免疫；剪贴板链路原样保留给闪电说引擎。
+  - **双引擎共存**：config `transcription.engine: shandianshuo | builtin`，默认
+    shandianshuo（产品成熟度更高），闪电说不可用平台（如 openKylin）切 builtin。
+  - **触发独立**：内置引擎触发键与闪电说 Alt 解耦（候选右 Alt / Ctrl+Alt+V，M11 实测定案）；
+    托盘菜单「开始听写」为 Wayland 无关兜底；M12 补 UKUI 系统快捷键 CLI（Wayland 最稳）。
+  - **密钥管理**：API key 走环境变量或 config.local.json（gitignore 已覆盖），种子
+    config 永不含密钥。
 
 ## 参考
 

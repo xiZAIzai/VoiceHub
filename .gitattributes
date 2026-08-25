@@ -1,0 +1,6 @@
+# Windows 开发机 autocrlf=true 会把 LF 转 CRLF，CRLF 的 .sh 在 WSL/Linux 下
+# bash 无法执行（\r 报错）。强制 shell 脚本恒为 LF。
+*.sh text eol=lf
+*.bat text eol=crlf
+*.png binary
+*.ico binary

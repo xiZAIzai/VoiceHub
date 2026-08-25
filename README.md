@@ -14,8 +14,8 @@ VoiceHub 守护进程按热键把文本一键注入台式机 / 笔记本 / 平�
 ```
 
 - **台式机（主控）**：全局热键（`keyboard`）、剪贴板监听（`WM_CLIPBOARDUPDATE` 事件驱动）、
-  设备发现（UDP 心跳 + 子网扫描兜底）、路由分发、SQLite 存储、Web 仪表盘（`127.0.0.1:8000`）、
-  托盘 + 原生窗口（pywebview）+ 可视化设置页 + 开机自启。
+  设备发现（UDP 心跳 + 子网扫描兜底）、路由分发、SQLite 存储、Web 仪表盘（`127.0.0.1:8765`）、
+  托盘 + 原生窗口（pywebview）+ 可视化设置页 + 开机自启（Linux 为托盘 + 浏览器仪表盘）。
 - **笔记本 / 平板（接收端）**：HTTP 收文（端口 5050）→ 写本机剪贴板 → 模拟 `Ctrl+V` 粘贴；
   每 4 秒向子网广播 UDP 心跳（端口 9898）供主控自动发现。
 
@@ -76,6 +76,11 @@ Windows 下安装即用；非 Windows 环境自动跳过。
   ./VoiceHub-x86_64.AppImage          # config/db/logs 锚定 AppImage 旁边，首启自动播种 config
   ```
 
+  启动后系统托盘出现 VoiceHub 图标（SNI 协议，菜单「打开仪表盘 / 退出」，左键单击亦可打开）；
+  仪表盘默认 <http://127.0.0.1:8765>（8000 易与 Triton 等常见服务冲突，已避开）。
+  注意：Wayland 会话下全局热键依赖 XWayland——焦点在 XWayland 应用（含闪电说）时可用，
+  焦点在原生 Wayland 应用时收不到（已知限制，随用随修）。
+
 **方式二：源码运行**
 
 **1. 笔记本启动接收端**（`--name` 需与 config.json 的 target key 一致）：
@@ -96,7 +101,8 @@ python -m voicehub.tablet_server --name tablet   # Root 粘贴需 su
 python -m voicehub.main
 ```
 
-启动后自动打开 <http://127.0.0.1:8000> 仪表盘（实时状态 + 历史记录，WebSocket 自动刷新）。
+启动后自动打开 <http://127.0.0.1:8765> 仪表盘（实时状态 + 历史记录，WebSocket 自动刷新；
+Linux 无自动开窗，走托盘菜单或手动打开）。
 
 **4. 日常使用**：按 `Alt+2`（选中笔记本目标，闪电说同时开始录音）→ 说话 → 按 `Alt` 结束
 → 转写写入剪贴板 → 自动推送到笔记本光标处。

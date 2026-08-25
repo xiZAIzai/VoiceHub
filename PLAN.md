@@ -1,8 +1,9 @@
 # VoiceHub 项目规划
 
-> 最后更新：2026-08-25（**v0.3.0 已发布**：V3 Linux 双端（主控 + 接收端）+ 双 AppImage 首发；
-> M7/M8/M10 完成，M9 转随用随做）
-> 当前焦点：openKylin 侧实际使用验证（AppImage 下载即用，随用随修）；V2 用户侧验证随用随验；V1 尾巴：平板部署
+> 最后更新：2026-08-25（**openKylin 实机随用随修第一轮完成**：SNI 托盘补齐 / 热键打包
+> 修复 / 默认端口避让 8000；v0.3.0 AppImage 实测三个问题定位与修复，见 ADR-8）
+> 当前焦点：openKylin 侧实际使用验证（托盘/热键已通，闪电说全链路真机联调随用随修）；
+> V2 用户侧验证随用随验；V1 尾巴：平板部署
 
 ## 产品目标
 
@@ -33,6 +34,12 @@
   （Ubuntu 22.04 构建的 AppImage 在 openKylin 均可正常运行；AppImage 自包含，glibc 向后兼容），
   以 AppImage 产物交付，openKylin 差异随用随修。**WSL2 为唯一开发/验证环境，直至 AppImage 打包
   完成**；闪电说 Linux 版行为四问转为 WSLg 内选做，不阻塞主线。ADR-7 就此定案。
+- **openKylin 实机随用随修第一轮（2026-08-25）**：v0.3.0 AppImage（openKylin SP2，Wayland 会话）
+  实测定位三问题并全部修复——① 托盘缺失系 M8 降级决策（非故障），补齐 SNI 直写托盘（ADR-8）；
+  ② 仪表盘 8000 端口被系统自带 kytensor（Triton，AI 推理）占用导致 bind 失败，默认端口改 8765；
+  ③ Release AppImage 缺 `pynput.keyboard._xorg` 热键全灭——pynput≥1.8 import 期即连 X server，
+  headless CI 上 `collect_submodules("pynput")` 静默返回空表，spec 改显式 hiddenimports + CI 加
+  xvfb 冒烟断言。本机重打包 + 冒烟 + 托盘 DBus 实测全绿（110 单测）。
 
 当前主要风险：
 
@@ -246,6 +253,19 @@
   V3 从"自建转写管道（换心脏）"回归为"零侵入移植"——ADR-1/4/5 原样延续。**自建转写管道
   转为挂起的远期方向**（保留价值：彻底消除 ADR-4 武装期误判与 ADR-5 本地重复贴；
   闪电说三平台齐备后必要性大降；2026-08-20 已登记为 V4 方向，见「V4（远期占位）」段）。
+  实机补充（2026-08-25，openKylin SP2 = Wayland 会话）：X11 全局热键依赖 XWayland，焦点在
+  XWayland 应用（含闪电说 Electron）时可用；焦点在原生 Wayland 应用时收不到（已知限制）。
+
+- **ADR-8 Linux 托盘：SNI 直写，修订 M8「无托盘」降级（2026-08-25 定案）**
+  M8 曾定案 Linux 无托盘（仪表盘走浏览器）。openKylin 实机使用暴露其体验问题（程序完全不可见），
+  且该机为 **Wayland 会话（kylin-wlcom）**：pystray 的 xorg 后端（XEmbed 托盘）不可用、
+  appindicator 后端需把 GTK/PyGObject 整套打进 AppImage（体积大、跨发行版脆）。实测 UKUI 面板
+  运行 `org.kde.StatusNotifierWatcher`（SNI 宿主在线），故选 **jeepney（纯 Python DBus）直写
+  StatusNotifierItem + DBusMenu 协议**（`linux_tray.py`）：菜单「打开仪表盘 / 退出」、左键单击
+  开仪表盘、图标走 IconPixmap（assets 收编，Pillow 缺失时 PIL 兜底画）；无 watcher / 无会话
+  总线 / 无 jeepney 均降级日志不阻塞。开机自启（.desktop）留作后续项。
+  同轮关联修复：默认端口 8000→8765（避让 Triton/kytensor）；pynput 打包改显式
+  hiddenimports（headless CI 上 collect_submodules 静默拿空表的事故，ADR-7 工具链层）。
 
 ## 参考
 

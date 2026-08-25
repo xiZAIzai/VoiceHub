@@ -1,7 +1,7 @@
 # VoiceHub 任务清单
 
-> 最后更新：2026-08-25（**v0.3.0 已发布**：V3 Linux 双端 + 双 AppImage 首发；M7/M8/M10 完成；
-> M9 转随用随做；V4 方向登记；V2 收尾随用随验；V1 尾巴平板部署）
+> 最后更新：2026-08-25（**openKylin 实机随用随修第一轮完成**：SNI 托盘 / 热键打包修复 /
+> 端口避让；测试 106→110 + 本机 AppImage 全链路实测全绿；M9 仍随用随做）
 > 已完成任务归档：[V1](./docs/tasks-archive/v1-completed.md) · [V2](./docs/tasks-archive/v2-completed.md)
 
 ## V3：Linux 双端适配（2026-08-20 立项，未启动）
@@ -38,6 +38,39 @@
   AppImage 形态验证并入 M10；共享分区数据连续性文档转可选随用随做。）
 - [ ] M9：接收端 Linux 体验（systemd service / 一键安装脚本 / README 章节）。
   （xclip/xdotool 粘贴后端已存在且冒烟通过；AppImage 交付后或以 AppImage 自带说明替代脚本。）
+- [x] openKylin 实机随用随修第一轮（v0.3.0 AppImage 首次真机使用暴露，2026-08-25）。
+  **完成时间**: 2026-08-25（三问题全部修复，110 单测 + 本机重打包全链路实测全绿，ADR-8）
+  - ① 托盘没出现：**不是故障**——Linux 版 M8 定案无托盘；但 openKylin（Wayland/kylin-wlcom）
+    下程序完全不可见不可接受 → 补齐 `linux_tray.py`（jeepney 直写 StatusNotifierItem +
+    DBusMenu，菜单「打开仪表盘/退出」，UKUI 面板实测 6 步 DBus 验证全绿；无 watcher/无总线/
+    无 jeepney 均降级日志）。
+  - ② 仪表盘起不来：8000 端口被 openKylin 自带 kytensor（Triton 内核，AI 推理服务）占用，
+    uvicorn bind 失败 → 默认端口 8000→8765（config 默认值 + 种子 + README + 本机已播种 config）。
+  - ③ 热键全灭：Release AppImage 缺 `pynput.keyboard._xorg` + `python-xlib`——pynput≥1.8
+    import 期即连 X server，headless CI 上 `collect_submodules("pynput")` **静默返回空表**
+    （WSL 本地构建因 WSLg 有 DISPLAY 而正常，故当时冒烟全绿、Release 翻车）→ spec 显式
+    hiddenimports 写死模块名；CI 加 xvfb + AppImage 冒烟断言「已注册 Linux 热键」；
+    smoke 脚本补 EXTRACT_AND_RUN 残留进程清杀。
+  - 本机（openKylin）用 conda py3.12 重建 `~/.venvs/voicehub` 重打包：冒烟 7 项全绿（含热键
+    武装→路由→落库），桌面真实运行验证托盘注册/仪表盘 8765/托盘「退出」干净收口。
+    注：conda py3.14 + venv 跑 PyInstaller 会段错误，py3.12 原生 conda 环境正常。
+  - 遗留验证项：闪电说全链路真机联调；焦点在原生 Wayland 应用时 X11 热键收不到
+    （已知限制，README 已注明）；Linux 开机自启（.desktop）待做。
+- [ ] 闪电说 openKylin 适配调查（2026-08-25 第一轮，**glibc 已解 / UI 渲染待官方**）：
+  - ✅ glibc：闪电说 0.7.5 要求 GLIBC_2.39（Ubuntu 24.10+ 基线），本机 2.38，deb/AppImage
+    同源同病。**免容器方案已落地并验证**：`~/bin/shandianshuo-launcher`（侧载 Ubuntu
+    libc6 2.43 自定义 loader + 复刻 linuxdeploy 环境；组成：`~/bin/sds-runtime/app` 解包
+    AppImage + `sds-runtime/glibc`）。Docker 对 glibc 问题无必要；且**对 UI 渲染问题无效**
+    （容器里 UI 仍要画到同一个合成器上）。
+  - ❌ UI 渲染（定性为闪电说 × kylin-wlcom 兼容 bug，已试尽外部手段）：X11 后端窗口在
+    XWayland 映射但用户不可见（合成器忽略 X11 置顶/激活请求；应用用 shaped 圆角窗）；
+    Wayland 后端窗口进 Alt+Tab（灰色缩略图）但从不显示，启动报 "No monitor available"，
+    WebKit 视图 0 帧渲染。已试：软件渲染全套（GDK_GL=disable / LIBGL_ALWAYS_SOFTWARE /
+    WEBKIT_DISABLE_COMPOSITING_MODE / WEBKIT_DISABLE_DMABUF_RENDERER）、沙箱排查
+    （bwrap 在、4 个 WebKitWebProcess 存活无崩溃）。待反馈闪电说官方（内测版）。
+  - 附带情报：闪电说 Linux 触发键为 **RAlt**（短按语音输入/长按助手），其全局键
+    rdev::grab 也被权限拒（降级轮询）；VoiceHub 侧若要对齐改 config
+    `shandianshuo.trigger_key: "alt_gr"`。闪电说为 Tauri 应用（非 Electron），GTK 后端。
 - [x] M10：daemon/receiver 打包 **AppImage**（PyInstaller one-dir → AppRun +
   .desktop + 图标 → appimagetool）+ WSL 内 AppImage 冒烟 + CI ubuntu job 扩展打包上传 +
   发 v0.3.0 Release + 文档收口。

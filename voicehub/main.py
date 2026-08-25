@@ -67,11 +67,16 @@ def build_components(config_path: str | Path = "config.json") -> Components:
     router = Router(config, discovery=discovery, transport=HttpPusher(), storage=storage)
     hotkeys = HotkeyRegistry()
 
-    # 剪贴板监控：Windows 读 win32 剪贴板，其他平台用空实现（不可用即不监听）
+    # 剪贴板监控：Windows 读 win32 剪贴板，Linux 读 xclip（V3/M8），
+    # 其他平台用空实现（不可用即不监听）
     if sys.platform == "win32":
         read_text = win32_read_text
+    elif sys.platform.startswith("linux"):
+        from .linux_backend import xclip_read_text
+
+        read_text = xclip_read_text
     else:
-        read_text = lambda: None  # noqa: E731 - 非 Windows 平台不监听剪贴板
+        read_text = lambda: None  # noqa: E731 - 非 Windows/Linux 平台不监听剪贴板
 
     def _on_text(text: str) -> None:
         logger.info("检测到转写文本（%d 字）", len(text))
@@ -172,8 +177,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if sys.platform == "win32":
         run_windows_backend(components)  # 阻塞：热键/托盘消息循环
+    elif sys.platform.startswith("linux"):
+        from .linux_backend import start_linux_backend
+
+        start_linux_backend(components)  # 阻塞：xclip 轮询 + pynput 热键（V3/M8）
     else:
-        logger.info("非 Windows 平台：仅仪表盘 + 设备发现运行，Ctrl+C 退出")
+        logger.info("非 Windows/Linux 平台：仅仪表盘 + 设备发现运行，Ctrl+C 退出")
         try:
             threading.Event().wait()
         except KeyboardInterrupt:

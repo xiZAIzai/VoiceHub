@@ -40,3 +40,20 @@ def test_resolve_data_path_absolute_kept(tmp_path):
     """绝对路径原样返回，不拼接。"""
     abs_db = tmp_path / "abs.db"
     assert resolve_data_path(abs_db, base_dir=tmp_path / "other") == abs_db
+
+
+def test_app_dir_env_home_overrides_everything(tmp_path, monkeypatch):
+    """VOICEHUB_HOME（AppImage 场景）最高优先级：压过 frozen 与 CWD。"""
+    home = tmp_path / "portable"
+    home.mkdir()
+    monkeypatch.setenv("VOICEHUB_HOME", str(home))
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "VoiceHub.exe"))
+    assert app_dir() == home
+    assert default_config_path() == home / "config.json"
+
+
+def test_app_dir_env_home_beats_cwd(tmp_path, monkeypatch):
+    """源码模式下 VOICEHUB_HOME 同样生效（不依赖 frozen 标志）。"""
+    monkeypatch.setenv("VOICEHUB_HOME", str(tmp_path))
+    assert app_dir() == tmp_path.resolve()

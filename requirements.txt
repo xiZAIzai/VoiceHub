@@ -9,6 +9,9 @@ pywin32>=306; sys_platform == "win32"
 pystray>=0.19; sys_platform == "win32"
 Pillow>=10.0; sys_platform == "win32"
 
+# Linux 专属（V3/M8）：X11 全局热键；剪贴板走系统 xclip（apt 安装，非 pip 依赖）
+pynput>=1.7; sys_platform == "linux"
+
 # 开发 / 测试
 pytest>=8.0
 httpx>=0.27  # FastAPI TestClient 依赖

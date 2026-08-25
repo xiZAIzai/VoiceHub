@@ -8,15 +8,22 @@ config.json / db / 日志必须锚定 exe 目录，否则会写到系统目录�
 - 源码运行：app_dir() = 当前工作目录（保持 v1 行为不变）。
 - 打包运行（sys.frozen）：app_dir() = exe 所在目录，config.json 与 logs/
   都放在 exe 旁边，用户可直接编辑 / 查看日志。
+- VOICEHUB_HOME 环境变量（V3/M10 AppImage 需求）：最高优先级显式指定数据目录。
+  AppImage 内部挂载点只读，AppRun 启动器用它把数据指到 AppImage 旁边
+  （便携式，与 Windows exe 同体验）或 ~/.config/voicehub（旁边不可写时回退）。
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 
 def app_dir() -> Path:
-    """应用运行目录：frozen 时为 exe 所在目录，否则为当前工作目录。"""
+    """应用运行目录：VOICEHUB_HOME > frozen 时 exe 所在目录 > 当前工作目录。"""
+    env = os.environ.get("VOICEHUB_HOME")
+    if env:  # AppImage 启动器注入
+        return Path(env).resolve()
     if getattr(sys, "frozen", False):  # PyInstaller 打包后置位
         return Path(sys.executable).resolve().parent
     return Path.cwd()

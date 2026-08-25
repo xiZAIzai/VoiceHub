@@ -1,7 +1,7 @@
 # VoiceHub 任务清单
 
-> 最后更新：2026-08-20（V3/M10 核心：**双 AppImage 打包完成 + WSL 冒烟全绿**，CI 已扩展；
-> 余 push 后 CI 首跑 + v0.3.0；V4 方向登记；V2 收尾随用随验；V1 尾巴平板部署）
+> 最后更新：2026-08-25（**v0.3.0 已发布**：V3 Linux 双端 + 双 AppImage 首发；M7/M8/M10 完成；
+> M9 转随用随做；V4 方向登记；V2 收尾随用随验；V1 尾巴平板部署）
 > 已完成任务归档：[V1](./docs/tasks-archive/v1-completed.md) · [V2](./docs/tasks-archive/v2-completed.md)
 
 ## V3：Linux 双端适配（2026-08-20 立项，未启动）
@@ -38,17 +38,18 @@
   AppImage 形态验证并入 M10；共享分区数据连续性文档转可选随用随做。）
 - [ ] M9：接收端 Linux 体验（systemd service / 一键安装脚本 / README 章节）。
   （xclip/xdotool 粘贴后端已存在且冒烟通过；AppImage 交付后或以 AppImage 自带说明替代脚本。）
-- [ ] M10：daemon/receiver 打包 **AppImage**（PyInstaller one-dir → AppRun +
+- [x] M10：daemon/receiver 打包 **AppImage**（PyInstaller one-dir → AppRun +
   .desktop + 图标 → appimagetool）+ WSL 内 AppImage 冒烟 + CI ubuntu job 扩展打包上传 +
   发 v0.3.0 Release + 文档收口。
-  （进展 2026-08-20：**打包链与冒烟已完成**——
-  `packaging/build_linux.sh` 一键产出 `dist/VoiceHub-x86_64.AppImage`(24M) +
-  `VoiceHubReceiver-x86_64.AppImage`(16M)；配套 `paths.py` 加 `VOICEHUB_HOME` 覆盖
-  （AppImage 只读挂载 → 便携目录），AppRun 播种 config/检测 xclip、xdotool 依赖；
-  `scripts/smoke_appimage.sh` 冒烟全绿（播种/便携目录/双服务/热键武装/拦截路由/便携落库）；
-  CI linux job 扩展打包上传 + tag 时 AppImage 进 Release；README 加 Linux 章节。
-  测试 104→106（paths env 覆盖 ×2），Windows/WSL 双平台全绿。
-  剩余：push 后 CI 首跑验证 → 打 v0.3.0。）
+  **完成时间**: 2026-08-25（**Release v0.3.0 已发布**，四产物：Windows 双 zip + Linux 双
+  AppImage；main 与 tag 流水线均全绿，linux job 含打包首跑通过。）
+  - 打包链（2026-08-20）：`packaging/build_linux.sh` 一键产出双 AppImage；
+    `paths.py` 加 `VOICEHUB_HOME`（AppImage 只读挂载 → 便携目录），AppRun 播种
+    config/检测 xclip、xdotool；`scripts/smoke_appimage.sh` 冒烟全绿；
+    CI linux job 打包上传 + tag 时 AppImage 进 Release；README Linux 章节。
+    测试 104→106，Windows/WSL 双平台全绿。详见本条目上方进展记录。
+  - 提交拆分（4 commits）：feat 主控后端 / feat 打包链 / docs 归档 / chore .gitattributes
+    （强制 .sh LF，防 autocrlf 破坏 WSL 执行）。
 
 ## V4（远期占位）：自建转写内核（2026-08-20 方向登记，未立项）
 

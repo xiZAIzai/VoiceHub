@@ -1,7 +1,8 @@
 # VoiceHub 项目规划
 
-> 最后更新：2026-08-20（V3/M10 核心：**双 AppImage 打包完成 + WSL 冒烟全绿**；余 push → CI 首跑 → v0.3.0）
-> 当前焦点：push 验证 CI（linux 打包 job 首跑）→ 发 v0.3.0；M9 简化为随用随做；V2 用户侧验证随用随验；V1 尾巴：平板部署
+> 最后更新：2026-08-25（**v0.3.0 已发布**：V3 Linux 双端（主控 + 接收端）+ 双 AppImage 首发；
+> M7/M8/M10 完成，M9 转随用随做）
+> 当前焦点：openKylin 侧实际使用验证（AppImage 下载即用，随用随修）；V2 用户侧验证随用随验；V1 尾巴：平板部署
 
 ## 产品目标
 
@@ -126,15 +127,16 @@
 - systemd user service + 一键安装脚本（依赖检查 + 服务装卸 + 自启）。
 - README「Linux 接收端」章节。
 
-### 🔶 Milestone 10（V3）：工程化收尾与 v0.3.0（AppImage 打包提前启动，2026-08-20）
+### ✅ Milestone 10（V3）：工程化收尾与 v0.3.0（2026-08-25 完成）
 
 - ~~daemon / receiver 打包为 AppImage~~ ✅ 2026-08-20（`packaging/build_linux.sh` 一键链：
-  PyInstaller one-dir → AppRun/.desktop/PNG → appimagetool；产物 24M/16M；AppRun 播种
+  PyInstaller one-dir → AppRun/.desktop/PNG → appimagetool；AppRun 播种
   config + 依赖检测，`paths.py` 新增 `VOICEHUB_HOME` 便携目录锚定；AppImage 冒烟
   `scripts/smoke_appimage.sh` 全绿，见 TASKS.md M10 记录）。
-- ~~CI ubuntu job 扩展打包并上传产物~~ ✅ 2026-08-20（push/PR 传 artifact；tag 时 AppImage
-  随 zip 一起发 Release；**待 push 后首跑验证**）。
-- 发 v0.3.0 Release（待 CI 全绿后），文档收口归档。
+- ~~CI ubuntu job 扩展打包并上传产物~~ ✅ 2026-08-20（2026-08-25 push 后 CI 首跑通过，
+  linux job 含打包全绿）。
+- ~~发 v0.3.0 Release~~ ✅ 2026-08-25（四产物：Windows 双 zip + Linux 双 AppImage，
+  main 与 tag 流水线全绿）。
 
 ### ⏳ V4（远期占位，未立项）：自建转写内核（2026-08-20 方向登记）
 
@@ -150,13 +152,13 @@
 
 ## 近阶段工作重点
 
-1. ~~V3 先行项（Ubuntu 22.04 基准，本机 WSL2）~~ ✅ 2026-08-20。
-2. ~~M7 预研与选型~~ ✅ 2026-08-20 定案（ADR-7，验证策略见上）。
-3. ~~M8 Linux 主控后端 + WSL 全链~~ ✅ 2026-08-20。
-4. ~~M10 AppImage 打包 + 冒烟 + CI 扩展~~ ✅ 2026-08-20（余 push 后 CI 首跑验证）。
-5. push → CI 双平台全绿 → 打 v0.3.0（AppImage + Windows zip 首次同发）。
-6. M9 接收端体验随用随做（systemd/自启脚本可选，AppImage 已是主交付形态）。
-7. V2 收尾用户侧验证随用随验；V1 尾巴（平板）按需再启。
+1. ~~V3 先行项 / M7 选型 / M8 Linux 主控 / M10 AppImage + v0.3.0~~ ✅ 2026-08-20~25
+   （全链详见 TASKS.md V3 章节记录）。
+2. openKylin 侧实际使用：从 Release 下载 AppImage 直接用；闪电说 Linux 内测版配合，
+   差异随用随修（ADR-7 策略）。
+3. M9 接收端体验随用随做（systemd/自启脚本可选，AppImage 已是主交付形态）。
+4. V2 收尾用户侧验证随用随验（窗口三步 / 笔记本真链路 / 自启重启）。
+5. V1 尾巴（平板 Termux 部署）按需再启；V4（自建转写内核）方向已登记待议。
 
 ## 架构约束（精简版）
 

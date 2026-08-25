@@ -7,7 +7,9 @@ V3/M8 第一版（ADR-7 占位，按 X11 假设先行开发，WSL 可测）：
 - 热键：pynput GlobalHotKeys 监听 Alt+N → 编排层 select_target
   （「按下即录」语义依赖闪电说同样吃 Alt 触发键）；
   pynput / DISPLAY 不可用时降级为日志提示，仪表盘照常可用。
-- 无托盘/原生窗口：仪表盘走浏览器（PLAN.md M8 降级决策）。
+- 托盘：SNI 直写（linux_tray，2026-08-25 openKylin 实机补齐，替代 M8 的
+  「无托盘」降级决策）——Wayland 会话下 XEmbed 托盘不可用，走 DBus 协议；
+  无 watcher 时同样降级。原生窗口维持不做，仪表盘走浏览器。
 
 依赖：xclip（系统包，apt install xclip）；pynput 走 requirements 的 linux 标记。
 平台依赖均延迟 import，非 Linux 平台 import 本模块不崩溃。
@@ -144,22 +146,43 @@ class PynputHotkeyBackend:
 
 
 def start_linux_backend(components) -> None:
-    """Linux 后端总入口：剪贴板轮询 + 热键（可降级）+ 主线程等待退出。"""
+    """Linux 后端总入口：剪贴板轮询 + 热键/托盘（均可降级）+ 主线程等待退出。
+
+    主线程等待对象从「永久 Event」改为共享 stop：托盘「退出」或 Ctrl+C 均能收口。
+    """
     poller = X11ClipboardPoller(components.monitor, components.orchestrator.on_clipboard_change)
     poller.start()
 
     hotkeys = PynputHotkeyBackend()
     hotkeys.register_all(components)
 
+    stop = threading.Event()
+    tray = _build_tray(components, stop)
+    tray.start()
+
     logger.info("Linux 后端已启动（仪表盘: http://%s:%.0f）",
                 components.config.server_host, components.config.server_port)
     try:
-        threading.Event().wait()  # 阻塞主线程，Ctrl+C 退出
+        stop.wait()  # 托盘「退出」置位；Ctrl+C 在主线程打断本等待
     except KeyboardInterrupt:
         logger.info("收到 Ctrl+C，正在退出")
     finally:
+        tray.stop()
         poller.stop()
         hotkeys.unregister_all()
         components.discovery.stop()
         components.storage.close()
         logger.info("VoiceHub 已退出")
+
+
+def _build_tray(components, stop: threading.Event):
+    """组装托盘：菜单「打开仪表盘」开浏览器（对位 Windows 版），「退出」停主循环。"""
+    import webbrowser
+
+    from .linux_tray import LinuxTray
+
+    url = f"http://{components.config.server_host}:{components.config.server_port}"
+    return LinuxTray(
+        on_open=lambda: webbrowser.open(url),
+        on_quit=stop.set,
+    )

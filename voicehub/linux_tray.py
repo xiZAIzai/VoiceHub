@@ -37,6 +37,7 @@ MENU_PATH = "/MenuBar"
 
 MENU_ID_ROOT = 0
 MENU_ID_OPEN = 10
+MENU_ID_DICTATE = 20  # V4/M11：builtin 听写引擎开关（on_dictate 未注入时不出现）
 MENU_ID_QUIT = 90
 
 ICON_SIZE_PX = 32
@@ -64,7 +65,9 @@ class MenuModel:
     """托盘菜单纯逻辑：条目属性 + 点击分发（与 DBus 细节解耦）。"""
 
     def __init__(self, on_open: Callable[[], None], on_quit: Callable[[], None],
-                 label_open: str = "打开仪表盘", label_quit: str = "退出") -> None:
+                 on_dictate: Optional[Callable[[], None]] = None,
+                 label_open: str = "打开仪表盘", label_quit: str = "退出",
+                 label_dictate: str = "开始听写") -> None:
         base = {"enabled": True, "visible": True}
         self._items: dict[int, dict[str, Any]] = {
             MENU_ID_OPEN: {"label": label_open, **base},
@@ -73,6 +76,10 @@ class MenuModel:
         self._actions: dict[int, Callable[[], None]] = {
             MENU_ID_OPEN: on_open, MENU_ID_QUIT: on_quit,
         }
+        # V4/M11：听写菜单可选注入（builtin 引擎启用时才有）
+        if on_dictate is not None:
+            self._items[MENU_ID_DICTATE] = {"label": label_dictate, **base}
+            self._actions[MENU_ID_DICTATE] = on_dictate
 
     def layout_tree(self) -> tuple[int, dict[str, Any], list]:
         """dbusmenu 布局树（纯 Python 表示；DBus 层负责 Variant 包装与递归嵌套）。"""
@@ -81,6 +88,14 @@ class MenuModel:
 
     def item(self, item_id: int) -> Optional[dict[str, Any]]:
         return self._items.get(item_id)
+
+    def set_label(self, item_id: int, label: str) -> bool:
+        """更新条目文案（听写 开/停 切换用）；不存在返回 False。"""
+        props = self._items.get(item_id)
+        if props is None:
+            return False
+        props["label"] = label
+        return True
 
     def activate(self, item_id: int) -> bool:
         act = self._actions.get(item_id)
@@ -152,29 +167,32 @@ def _import_dbus() -> SimpleNamespace:
     from jeepney.io.blocking import open_dbus_connection
     from jeepney.wrappers import (HeaderFields, MessageType,  # noqa: F401
                                   DBusAddress, new_error, new_method_call,
-                                  new_method_return)
+                                  new_method_return, new_signal)
 
     return SimpleNamespace(HeaderFields=HeaderFields, MessageType=MessageType,
                            open_dbus_connection=open_dbus_connection,
                            DBusAddress=DBusAddress, new_error=new_error,
                            new_method_call=new_method_call,
-                           new_method_return=new_method_return)
+                           new_method_return=new_method_return,
+                           new_signal=new_signal)
 
 
 class LinuxTray:
     """SNI 托盘句柄：start() 起后台线程，stop() 关闭；所有降级路径只留日志不抛出。"""
 
     def __init__(self, on_open: Callable[[], None], on_quit: Callable[[], None],
+                 on_dictate: Optional[Callable[[], None]] = None,
                  title: str = "VoiceHub", description: str = "语音转写多设备分发") -> None:
-        self._menu = MenuModel(on_open=on_open, on_quit=on_quit)
+        self._menu = MenuModel(on_open=on_open, on_quit=on_quit, on_dictate=on_dictate)
         self._title = title
         self._description = description
         self._pixmap: Optional[tuple[int, int, bytes]] = None
-        self._revision = 1  # dbusmenu 版本号（菜单静态，恒 1 即可）
+        self._revision = 1  # dbusmenu 版本号（标签更新时自增）
         self._bus_name = ""
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._dbus: Optional[SimpleNamespace] = None
+        self._conn = None  # 服务线程持有的连接（LayoutUpdated 信号用）
 
     # ---------- 生命周期 ----------
     def start(self) -> None:
@@ -189,6 +207,26 @@ class LinuxTray:
         if t is not None and t.is_alive():
             t.join(timeout=2)
 
+    # ---------- 听写状态（V4/M11：菜单标签 开/停 切换） ----------
+    def set_dictation_state(self, recording: bool) -> None:
+        """录音中 → 「停止听写」，否则「开始听写」；面板下次打开菜单即见新标签。"""
+        label = "停止听写" if recording else "开始听写"
+        self._menu.set_label(MENU_ID_DICTATE, label)
+        self._revision += 1
+        self._emit_layout_updated()
+
+    def _emit_layout_updated(self) -> None:
+        """尽力广播 LayoutUpdated（已打开菜单的面板立即刷新；失败仅降级为下次拉取）。"""
+        db, conn = self._dbus, self._conn
+        if db is None or conn is None:
+            return
+        try:
+            sig = db.new_signal(db.DBusAddress(MENU_PATH, "", MENU_IFACE),
+                                "LayoutUpdated", "ui", (self._revision, 0))
+            conn.send_message(sig)
+        except Exception:  # noqa: BLE001 - 信号失败不影响托盘
+            logger.debug("LayoutUpdated 广播失败（面板将在下次打开时刷新）")
+
     # ---------- DBus 线程主体 ----------
     def _run(self) -> None:
         try:
@@ -201,6 +239,7 @@ class LinuxTray:
         except Exception as e:  # noqa: BLE001 - 无桌面会话（SSH/纯 tty）属降级路径
             logger.warning("无法连接 DBus 会话总线，托盘未启动: %s", e)
             return
+        self._conn = conn
         try:
             if self._claim_name(conn) and self._register_with_watcher(conn):
                 logger.info("Linux 托盘已启动（SNI: %s）", self._bus_name)
@@ -208,6 +247,7 @@ class LinuxTray:
         except Exception:  # noqa: BLE001 - 托盘线程死掉必须可见，但不拖垮主程序
             logger.exception("托盘线程异常退出")
         finally:
+            self._conn = None
             try:
                 conn.close()
             except Exception:  # noqa: BLE001

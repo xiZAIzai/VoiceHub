@@ -48,6 +48,25 @@ def xclip_read_text() -> Optional[str]:
     return p.stdout or None
 
 
+def xclip_write_text(text: str) -> bool:
+    """写 X11 CLIPBOARD 选区（builtin 直通链路的本地投递，V4/ADR-9）。
+
+    坑：xclip 写入后会 fork 守护进程持有选区（X11 剪贴板需要活客户端），
+    若 capture_output 捕获管道，守护进程占着管道导致 run() 等到超时误报失败
+    （openKylin 实测：报失败但剪贴板实际已写入）。stdout/stderr 必须 DEVNULL。
+    """
+    try:
+        p = subprocess.run(
+            ["xclip", "-selection", "clipboard", "-i"],
+            input=text, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=2, encoding="utf-8",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.warning("xclip 写入失败（未安装/无 X 会话）")
+        return False
+    return p.returncode == 0
+
+
 class X11ClipboardPoller:
     """剪贴板轮询器：把 X11 剪贴板变化翻译成 on_change 事件。
 
@@ -115,11 +134,23 @@ def build_hotkey_map(trigger_key: str, targets) -> list[tuple[str, str]]:
     return [(f"<{trigger_key}>+{t.hotkey}", t.key) for t in targets.values()]
 
 
+# pynput GlobalHotKeys 修饰键集合（其余键名原样传递，如 'v' / 'f1'）
+_PYNPUT_MODIFIERS = {"ctrl", "alt", "altgr", "shift", "cmd", "win", "meta"}
+
+
+def to_pynput_combo(spec: str) -> str:
+    """'ctrl+alt+v' → '<ctrl>+<alt>+v'（修饰键加尖括号）。纯逻辑可单测。"""
+    parts = [p.strip().lower() for p in spec.split("+") if p.strip()]
+    if not parts:
+        return ""
+    return "+".join(f"<{p}>" if p in _PYNPUT_MODIFIERS else p for p in parts)
+
+
 class PynputHotkeyBackend:
-    """pynput 全局热键（X11）：Alt+N → 编排层 select_target。
+    """pynput 全局热键（X11）：Alt+N → select_target；听写触发键 → engine.toggle。
 
     register_all 返回 False 表示降级（无 DISPLAY / 无 pynput），
-    调用方照常运行其余功能。
+    调用方照常运行其余功能（托盘菜单仍可触发听写）。
     """
 
     def __init__(self) -> None:
@@ -134,6 +165,13 @@ class PynputHotkeyBackend:
         mapping = build_hotkey_map(components.config.trigger_key, components.config.targets)
         hotkeys = {combo: (lambda k=key: components.orchestrator.select_target(k))
                    for combo, key in mapping}
+        # V4/M11：builtin 听写独立触发键（ADR-9：与闪电说 Alt 解耦，避免撞车）
+        dictation = getattr(components, "dictation", None)
+        if dictation is not None:
+            combo = to_pynput_combo(components.config.transcription.trigger_key)
+            if combo:
+                hotkeys[combo] = dictation.toggle
+                logger.info("已注册听写热键: %s", combo)
         self._listener = keyboard.GlobalHotKeys(hotkeys)
         self._listener.start()  # listener 自带监听线程
         logger.info("已注册 Linux 热键: %s", [c for c, _ in mapping])
@@ -149,6 +187,7 @@ def start_linux_backend(components) -> None:
     """Linux 后端总入口：剪贴板轮询 + 热键/托盘（均可降级）+ 主线程等待退出。
 
     主线程等待对象从「永久 Event」改为共享 stop：托盘「退出」或 Ctrl+C 均能收口。
+    V4/M11：builtin 引擎启用时托盘带「开始听写」菜单 + 独立热键（ADR-9 双通道）。
     """
     poller = X11ClipboardPoller(components.monitor, components.orchestrator.on_clipboard_change)
     poller.start()
@@ -159,6 +198,7 @@ def start_linux_backend(components) -> None:
     stop = threading.Event()
     tray = _build_tray(components, stop)
     tray.start()
+    _wire_dictation(components, tray)
 
     logger.info("Linux 后端已启动（仪表盘: http://%s:%.0f）",
                 components.config.server_host, components.config.server_port)
@@ -182,7 +222,21 @@ def _build_tray(components, stop: threading.Event):
     from .linux_tray import LinuxTray
 
     url = f"http://{components.config.server_host}:{components.config.server_port}"
+    dictation = getattr(components, "dictation", None)
     return LinuxTray(
         on_open=lambda: webbrowser.open(url),
         on_quit=stop.set,
+        on_dictate=dictation.toggle if dictation is not None else None,
     )
+
+
+def _wire_dictation(components, tray) -> None:
+    """听写引擎状态 → 托盘菜单标签（开始/停止听写）跟随。"""
+    dictation = getattr(components, "dictation", None)
+    if dictation is None:
+        return
+
+    def _on_state(state: str) -> None:
+        tray.set_dictation_state(state == "recording")
+
+    dictation.set_on_state_change(_on_state)

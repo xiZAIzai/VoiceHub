@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Optional
+from typing import Optional  # noqa: UP045 - 与存量代码 typing 风格保持一致
 
 from .config import Config
 from .clipboard_monitor import ClipboardMonitor
@@ -72,6 +72,32 @@ class Orchestrator:
         if was_armed and not self._monitor.is_armed():
             self._sticky.clear()
         return None
+
+    # ---------- 直通路径（V4/ADR-9 builtin 引擎） ----------
+    def route_direct(self, text: str, metadata: Optional[dict] = None) -> dict:
+        """自建转写内核的直通路由：不经剪贴板监听链路（ADR-4/ADR-5 痛点免疫）。
+
+        目标解析：粘滞目标优先（用户先按了 Alt+N 的既有习惯不变），
+        无粘滞则退 config.transcription.default_target，再退第一个 local 目标。
+        落库 metadata 带 source=builtin 与闪电说来源区分。
+        """
+        target_key = self._sticky.consume()
+        if target_key is None:
+            target_key = self._default_direct_target()
+        meta = {"source": "builtin", **(metadata or {})}
+        if target_key is None:
+            logger.warning("直通路由无可用目标（未配置 targets）")
+            return {"ok": False, "error": "no target", "target": None}
+        return self._router.route(text, target_key, metadata=meta, deliver_local=True)
+
+    def _default_direct_target(self) -> Optional[str]:
+        tc = self._config.transcription
+        if tc.default_target and tc.default_target in self._config.targets:
+            return tc.default_target
+        for key, t in self._config.targets.items():
+            if t.type == "local":
+                return key
+        return next(iter(self._config.targets), None)
 
     # ---------- 驱动 ----------
     def _settle_driver(self) -> None:

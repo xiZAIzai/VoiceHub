@@ -84,7 +84,7 @@
   - 提交拆分（4 commits）：feat 主控后端 / feat 打包链 / docs 归档 / chore .gitattributes
     （强制 .sh LF，防 autocrlf 破坏 WSL 执行）。
 
-## V4：自建转写内核·云端 ASR（2026-08-25 立项，M11 待开工）
+## V4：自建转写内核·云端 ASR（2026-08-25 立项；M11 代码+实机冒烟完成 2026-08-26）
 
 > 原「远期占位」升格立项（用户决策）。催化：闪电说 Linux 版在 openKylin UI 渲染 0 帧
 > 不可用 + glibc 基线过高（调查见 V3 章节），openKylin 语音链路单点依赖被打破。
@@ -113,22 +113,31 @@
       免费试用礼包）拿一把新 key 换入 config.local.json 即可，其余全部就绪。
     - 模型串 `Doubao_Seed_ASR_Streaming_2.0…` 非调用参数（resource id 才是）。
     - DeepSeek 润色已实测可用（deepseek-v4-flash；httpx 需 trust_env=False 绕 socks 代理）。
-  - [ ] ② config 扩展 `transcription` 段：engine（shandianshuo|builtin）/ provider /
-    base_url（WS 地址，默认 sauc bigmodel_nostream）/ resource_id
-    （默认 volc.seedasr.sauc.duration）/ api_key / language / 触发键 / VAD 参数；
-    校验与原子写回沿 ConfigService；密钥读环境变量（如 `VOICEHUB_ASR_API_KEY`）或
-    config.local.json，种子 config 不含密钥。
-  - [ ] ③ `recorder.py`：sounddevice 录音 + 纯逻辑状态机（idle→recording→processing，
-    TDD）；两种停止模式（再按一次停止 / VAD 静音自动停）；WAV/临时文件生命周期管理。
-  - [ ] ④ `asr_client.py`：httpx multipart 上传音频 → 文本；超时/重试/错误落日志；
-    Provider 抽象留适配位（非 OpenAI 兼容家可子类扩展）。
-  - [ ] ⑤ orchestrator 直通路径 `route_direct(text)`：消费粘滞目标或默认目标，
-    跳过剪贴板监听链路；落库字段标注 source=builtin（与闪电说来源区分）。
-  - [ ] ⑥ 触发双通道：托盘菜单「开始听写」（Wayland 无关兜底）+ pynput 独立热键
-    （候选右 Alt / Ctrl+Alt+V，实测定案写入 ADR-9 附录，避免与闪电说 Alt 耦合）。
-  - [ ] ⑦ 测试与冒烟：状态机/provider mock/config 校验单测；WSL/openKylin 冒烟
-    （真实麦克风 → API → 仪表盘落库 + 路由接收端）。
-  - [ ] ⑧ openKylin 实机验收：不装闪电说，完成一次语音 → 仪表盘可见记录 → 路由成功。
+  - [x] ② config 扩展 `transcription` 段 ✅ 2026-08-26：TranscriptionConfig
+    （engine/provider/base_url/resource_id/api_key/language/trigger_key/default_target/
+    sample_rate/VAD 四参数）；Config.load 深度合并 config.local.json + 环境变量
+    `VOICEHUB_ASR_API_KEY` 最高优先；种子 config 已含无密钥模板段。
+  - [x] ③ `voicehub/dictation/` 包 ✅ 2026-08-26：vad.py（纯逻辑，静音/未开口/
+    最长三停条件）+ recorder.py（sounddevice + **arecord 子进程回退**——openKylin 无
+    PortAudio 无 sudo 实测可用，亦免 AppImage 收编 PortAudio）+ engine.py（状态机
+    idle→recording→processing，会话令牌防旧回调污染，no_speech 跳过 ASR 省调用）。
+  - [x] ④ `asr_client.py` ✅ 2026-08-26：火山豆包 WS v3 二进制协议（帧编解码纯函数，
+    自 spike 移植）；连接可注入（假 WS 单测）；瞬时失败重试 1 次，鉴权错不重试；
+    AsrProvider 协议留多厂商适配位。修复探针同源的 read() 缓冲切片 bug（整条消息
+    会被当 n 字节返回，多帧消息尾部丢失——单测抓住）。
+  - [x] ⑤ orchestrator `route_direct(text)` ✅ 2026-08-26：粘滞目标优先 →
+    default_target → 首个 local；local 投递 = 写系统剪贴板（Router.deliver_local +
+    xclip/ctypes 写入器，xclip fork 守护进程坑见 ADR-9 附录）；落库 source=builtin。
+  - [x] ⑥ 触发双通道 ✅ 2026-08-26：托盘菜单「开始听写/停止听写」（动态标签 +
+    LayoutUpdated 广播）+ pynput **Ctrl+Alt+V**（定案，右 Alt 弃用——与闪电说物理同键
+    会互抢；实测 xdotool 合成键可触发）；Windows 侧热键+托盘菜单同步接线。
+  - [x] ⑦ 测试与冒烟 ✅ 2026-08-26：单测 110→154 全绿（dictation 23 + 接线 20 新增）；
+    openKylin 实机冒烟：麦克风采集 ✓（环境底噪 RMS 0.0002）/ VAD 4s 自动停 ✓ /
+    引擎全循环 ✓（ASR 到服务端鉴权层，key 无效止于 401 错误路径，无崩溃）/ 直通路由
+    →剪贴板+DB 落库(10ms) ✓ / 托盘 DBus 点击触发录音 ✓ / 热键触发 ✓。
+  - [ ] ⑧ openKylin 实机验收（**待有效 API key**）：不装闪电说，说一句话 → 识别文本
+    → 剪贴板/远端路由 → 仪表盘可见记录。换 key 后一条命令复验：
+    `python scripts/spike/volc_asr_v3_probe.py` 输出「✅ 鉴权+协议全链路通」即可人工验收。
 - [ ] **M12：体验完善**（润色 / 状态可视化 / Wayland 稳触发）
   - [ ] LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
   - [ ] 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态。

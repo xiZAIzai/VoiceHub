@@ -10,6 +10,17 @@
     "receiver_port": 5050
   },
   "shandianshuo": { "trigger_key": "alt" },
+  "transcription": {
+    "engine": "shandianshuo",
+    "provider": "volcengine_sauc",
+    "base_url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream",
+    "resource_id": "volc.seedasr.sauc.duration",
+    "language": "auto",
+    "trigger_key": "ctrl+alt+v",
+    "vad_silence_ms": 1500,
+    "vad_threshold": 0.012,
+    "max_duration_sec": 60
+  },
   "targets": {
     "desktop": { "name": "主力台式机", "hotkey": "1", "type": "local" },
     "laptop": { "name": "便携笔记本", "hotkey": "2", "type": "network_http" },

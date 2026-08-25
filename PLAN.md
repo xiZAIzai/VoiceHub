@@ -149,25 +149,31 @@
 - ~~发 v0.3.0 Release~~ ✅ 2026-08-25（四产物：Windows 双 zip + Linux 双 AppImage，
   main 与 tag 流水线全绿）。
 
-### 🔶 V4：自建转写内核·云端 ASR（2026-08-25 立项，M11 待开工）
+### 🔶 V4：自建转写内核·云端 ASR（2026-08-25 立项；M11 代码完成 2026-08-26，待有效 key 全链验收）
 
 > 原「远期占位」升格立项。选型定案见 ADR-9（ASR 统一云端 / 直通注入不经剪贴板 /
 > 双引擎开关与闪电说共存 / 触发键独立）。任务明细与勾选进度在 TASKS.md「V4」章节。
 
-#### Milestone 11：最小闭环竖切（录音 → 云 ASR → 直通路由）
+#### Milestone 11：最小闭环竖切（录音 → 云 ASR → 直通路由）——代码与实机冒烟完成 ✅ 2026-08-26
 
-- provider spike：候选云 ASR（OpenAI 兼容 `/v1/audio/transcriptions` 体系优先：
-  智谱 / 讯飞 / 火山 / Deepgram / Groq 等）各测中文短句，按延迟/准确性/价格定默认。
-- config `transcription` 段（engine / provider / base_url / model / language / VAD 参数）；
-  密钥走环境变量或 config.local.json（gitignore 已覆盖），种子 config 永不含密钥。
-- `recorder`（sounddevice + 纯逻辑状态机 idle→recording→processing，两种停止模式：
-  再按一次 / VAD 静音自动停）+ `asr_client`（httpx multipart 上传，超时/重试/错误落日志）。
-- orchestrator 直通路径 `route_direct(text)`：消费粘滞目标或默认目标，**跳过剪贴板链路**
-  （ADR-4 误判 / ADR-5 重复贴对内置引擎天然免疫）。
-- 触发：托盘菜单「开始听写」（Wayland 无关，最稳兜底）+ pynput 独立热键
-  （候选右 Alt / Ctrl+Alt+V，实测定案，避免与闪电说 Alt 耦合）。
-- 测试（状态机 / provider mock / config 校验）+ WSL 冒烟（真实麦克风 → API → 落库路由）；
-  openKylin 实机验收：不装闪电说完成一次语音 → 仪表盘可见 → 路由到接收端。
+- ~~provider spike~~ ✅（结论见 TASKS.md M11-①：火山豆包 = openspeech WS v3 二进制协议，
+  非 OpenAI 兼容端点；默认 `sauc/bigmodel_nostream` + `volc.seedasr.sauc.duration`；
+  新版控制台仅需 `X-Api-Key` 单头鉴权。DeepSeek 润色实测可用）。
+- ~~config `transcription` 段~~ ✅（engine/provider/base_url/resource_id/api_key/language/
+  trigger_key/default_target/VAD 参数；config.local.json 深度合并 + 环境变量
+  `VOICEHUB_ASR_API_KEY` 最高优先；种子 config 永不含密钥）。
+- ~~recorder + asr_client + engine~~ ✅（`voicehub/dictation/` 包：VAD 纯逻辑 /
+  sounddevice 录音 **+ arecord 子进程回退**（openKylin 无 PortAudio 且无 sudo，实测可用）/
+  WS v3 帧编解码纯函数 + 可注入连接 / 状态机 idle→recording→processing 带会话令牌）。
+- ~~route_direct 直通路径~~ ✅（粘滞目标优先 → default_target → 首个 local；
+  local 投递 = 写系统剪贴板（xclip/ctypes），落库 metadata source=builtin）。
+- ~~触发双通道~~ ✅（托盘菜单「开始听写/停止听写」动态标签 + pynput Ctrl+Alt+V；
+  实测两通道均可触发完整录音循环，Wayland 下 X11 热键仍受焦点限制，托盘为主通道）。
+- ~~测试~~ ✅ 154 全绿（VAD/帧协议/引擎状态机/接线 43 项新增）；openKylin 实机冒烟：
+  麦克风采集 ✓ VAD 自动停 ✓ 引擎全循环 ✓（ASR 到达服务端鉴权层，因 key 无效止于
+  401 错误路径）直通路由→剪贴板+DB ✓ 托盘点击触发 ✓ 热键触发 ✓。
+- ⏳ 遗留：**有效 API key 后的真语音全链验收**（说一句话 → 识别文本 → 剪贴板/远端路由），
+  及仪表盘记录可见性人工确认。
 
 #### Milestone 12：体验完善（润色 / 状态可视化 / Wayland 稳触发）
 
@@ -297,20 +303,28 @@
   同轮关联修复：默认端口 8000→8765（避让 Triton/kytensor）；pynput 打包改显式
   hiddenimports（headless CI 上 collect_submodules 静默拿空表的事故，ADR-7 工具链层）。
 
-- **ADR-9 自建转写内核：云端 ASR + 直通注入 + 双引擎开关（2026-08-25 定案）**
+- **ADR-9 自建转写内核：云端 ASR + 直通注入 + 双引擎开关（2026-08-25 定案；M11 附录 2026-08-26）**
   决策背景：闪电说 Linux 版（Tauri/GTK）在 openKylin（kylin-wlcom）UI 渲染 0 帧不可用、
   glibc 2.39 基线过高（调查见 TASKS.md V3），语音链路单点依赖被打破，V4 由远期占位升格立项。
-  - **ASR 统一走云**（用户决策 2026-08-25；本地模型明确不做）：优先 OpenAI 兼容
-    `/v1/audio/transcriptions` 接口体系（智谱/讯飞/火山/Deepgram/Groq 等易适配），
-    provider 可配，M11 spike 实测定默认。
+  - **ASR 统一走云**（用户决策 2026-08-25；本地模型明确不做）：~~优先 OpenAI 兼容
+    `/v1/audio/transcriptions` 接口体系~~ spike 证伪——火山豆包 ASR 实为 **openspeech
+    WebSocket v3 二进制协议**（默认 `sauc/bigmodel_nostream`，X-Api-Key 单头鉴权，
+    resource id `volc.seedasr.sauc.duration`），详见 TASKS.md M11-①；AsrProvider 协议
+    留多厂商适配位。
   - **直通注入**：内置引擎转写文本走 `orchestrator.route_direct()`，不经剪贴板——
     ADR-4 武装期误判、ADR-5 本地重复贴对内置引擎天然免疫；剪贴板链路原样保留给闪电说引擎。
+    local 目标投递 = VoiceHub 写系统剪贴板（Wayland 焦点内直接 Ctrl+V；自动注入留 M12+）。
   - **双引擎共存**：config `transcription.engine: shandianshuo | builtin`，默认
     shandianshuo（产品成熟度更高），闪电说不可用平台（如 openKylin）切 builtin。
-  - **触发独立**：内置引擎触发键与闪电说 Alt 解耦（候选右 Alt / Ctrl+Alt+V，M11 实测定案）；
-    托盘菜单「开始听写」为 Wayland 无关兜底；M12 补 UKUI 系统快捷键 CLI（Wayland 最稳）。
-  - **密钥管理**：API key 走环境变量或 config.local.json（gitignore 已覆盖），种子
-    config 永不含密钥。
+  - **触发独立（附录，2026-08-26 实测）**：定案 **Ctrl+Alt+V**（右 Alt 弃用——与闪电说
+    触发键物理同键，双引擎并存时会互相抢触发）。pynput X11 热键在 Wayland 下仍受
+    「XWayland 窗口聚焦」限制（xdotool 合成键实测可触发）；托盘菜单「开始听写/停止听写」
+    为 Wayland 无关主通道（DBus 点击实测可触发完整循环）；M12 补 UKUI 系统快捷键 CLI。
+  - **密钥管理**：API key 走环境变量 `VOICEHUB_ASR_API_KEY` 或 config.local.json
+    （gitignore 已覆盖，与种子 config 深度合并，环境变量优先），种子 config 永不含密钥。
+  - **实现附录（M11 实机）**：openKylin 无 PortAudio 且无 sudo → 录音器加 **arecord
+    子进程回退**（ALSA 最底层公共依赖，亦免 AppImage 收编 PortAudio）；xclip 写剪贴板
+    必须 DEVNULL 重定向（xclip fork 守护进程持管道，capture_output 会误报超时失败）。
 
 ## 参考
 

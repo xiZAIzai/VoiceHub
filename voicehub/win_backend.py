@@ -27,6 +27,40 @@ WM_CLIPBOARDUPDATE = 0x031D
 WM_DESTROY = 0x0002
 
 
+def win32_write_text(text: str) -> bool:
+    """写 Windows 剪贴板 CF_UNICODETEXT（V4/ADR-9 builtin 直通链路的本地投递）。
+
+    仅 Windows 下调用（ctypes 延迟导入，非 Windows 平台 import 本模块不崩溃）。
+    """
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    CF_UNICODETEXT, GMEM_MOVEABLE = 13, 0x0002
+    data = text.encode("utf-16-le") + b"\x00\x00"
+    if not user32.OpenClipboard(None):
+        return False
+    try:
+        user32.EmptyClipboard()
+        h = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+        if not h:
+            return False
+        ptr = kernel32.GlobalLock(h)
+        if not ptr:
+            kernel32.GlobalFree(h)
+            return False
+        try:
+            ctypes.memmove(ptr, data, len(data))
+        finally:
+            kernel32.GlobalUnlock(h)
+        if not user32.SetClipboardData(CF_UNICODETEXT, h):
+            kernel32.GlobalFree(h)
+            return False
+        return True
+    finally:
+        user32.CloseClipboard()
+
+
 # ---------- 全局热键 ----------
 class HotkeyBackend:
     """用 keyboard 库注册全局热键，绑定到编排层。"""
@@ -42,6 +76,12 @@ class HotkeyBackend:
             handle = keyboard.add_hotkey(combo, lambda k=key: components.orchestrator.select_target(k))
             self._handles.append(handle)
             logger.info("已注册热键: %s -> %s", combo, target.name)
+        # V4/M11：builtin 听写独立触发键（keyboard 库直接吃 'ctrl+alt+v' 格式）
+        dictation = getattr(components, "dictation", None)
+        if dictation is not None and components.config.transcription.trigger_key:
+            combo = components.config.transcription.trigger_key
+            self._handles.append(keyboard.add_hotkey(combo, dictation.toggle))
+            logger.info("已注册听写热键: %s", combo)
 
     def unregister_all(self) -> None:
         import keyboard  # 仅 Windows
@@ -213,12 +253,20 @@ def run_tray(components, stop_event: threading.Event) -> None:
         else:
             install_autostart()
 
-    menu = pystray.Menu(
+    items = [
         pystray.MenuItem("打开主窗口", _open_main),
         pystray.MenuItem("开机自启", _toggle_autostart,
                          checked=lambda item: is_autostart_enabled()),
-        pystray.MenuItem("退出", _exit),
-    )
+    ]
+    # V4/M11：builtin 听写引擎（ADR-9 双通道之一，热键在 HotkeyBackend 注册）
+    dictation = getattr(components, "dictation", None)
+    if dictation is not None:
+        def _toggle_dictate(icon, item):
+            dictation.toggle()
+
+        items.insert(1, pystray.MenuItem("开始听写/停止听写", _toggle_dictate))
+    items.append(pystray.MenuItem("退出", _exit))
+    menu = pystray.Menu(*items)
     icon = pystray.Icon("voicehub", _make_tray_icon(), "VoiceHub", menu)
     icon.run_detached()
     logger.info("托盘已启动")

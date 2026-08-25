@@ -47,6 +47,7 @@ class Components:
     hotkeys: HotkeyRegistry
     orchestrator: Orchestrator
     dashboard: Dashboard
+    dictation: Optional[object] = None  # V4/M11 builtin 听写引擎（engine=builtin 时存在）
 
 
 def build_components(config_path: str | Path = "config.json") -> Components:
@@ -63,8 +64,11 @@ def build_components(config_path: str | Path = "config.json") -> Components:
         discovery_port=config.discovery_port,
     )
     sticky = StickyTarget(pending_timeout_sec=config.pending_timeout_sec)
-    # transport 必须注入：Router 不带 transport 时所有远程路由都会以 "no transport" 失败
-    router = Router(config, discovery=discovery, transport=HttpPusher(), storage=storage)
+    # transport 必须注入：Router 不带 transport 时所有远程路由都会以 "no transport" 失败；
+    # clipboard_write 供 builtin 直通链路本地投递（V4/ADR-9）
+    clipboard_write = _clipboard_writer()
+    router = Router(config, discovery=discovery, transport=HttpPusher(), storage=storage,
+                    clipboard_write=clipboard_write)
     hotkeys = HotkeyRegistry()
 
     # 剪贴板监控：Windows 读 win32 剪贴板，Linux 读 xclip（V3/M8），
@@ -97,11 +101,72 @@ def build_components(config_path: str | Path = "config.json") -> Components:
     for key, target in config.targets.items():
         hotkeys.register(key, target.hotkey, lambda k=key: orchestrator.select_target(k))
 
+    # V4/M11：builtin 听写引擎（录音 → 云 ASR → orchestrator 直通路由）
+    dictation = build_dictation(config, orchestrator)
+
     return Components(
         config=config, storage=storage, discovery=discovery, sticky=sticky,
         monitor=monitor, router=router, hotkeys=hotkeys,
-        orchestrator=orchestrator, dashboard=dashboard,
+        orchestrator=orchestrator, dashboard=dashboard, dictation=dictation,
     )
+
+
+def _clipboard_writer():
+    """平台剪贴板写入器（builtin 直通链路本地投递）；未知平台返回 None。"""
+    if sys.platform == "win32":
+        from .win_backend import win32_write_text
+
+        return win32_write_text
+    if sys.platform.startswith("linux"):
+        from .linux_backend import xclip_write_text
+
+        return xclip_write_text
+    return None
+
+
+def build_dictation(config: Config, orchestrator: Orchestrator):
+    """组装听写引擎；engine != builtin 或依赖/密钥缺失时返回 None（其余功能照常）。
+
+    密钥来源：config.local.json / 环境变量（见 Config.load），种子 config 恒不含。
+    """
+    if config.transcription.engine != "builtin":
+        return None
+    if not config.transcription.api_key:
+        logger.warning("transcription.engine=builtin 但未配置 api_key"
+                       "（config.local.json 或 VOICEHUB_ASR_API_KEY），听写不可用")
+        return None
+    try:
+        from .dictation import DictationEngine, VadTracker
+        from .dictation.asr_client import VolcengineSaucClient
+        from .dictation.recorder import MicrophoneRecorder
+
+        tc = config.transcription
+        vad = VadTracker(
+            silence_ms=tc.vad_silence_ms,
+            threshold=tc.vad_threshold,
+            lead_in_ms=tc.vad_lead_in_ms,
+            max_duration_ms=int(tc.max_duration_sec * 1000),
+        )
+        recorder = MicrophoneRecorder(sample_rate=tc.sample_rate, vad=vad)
+        provider = VolcengineSaucClient(
+            api_key=tc.api_key,
+            base_url=tc.base_url,
+            resource_id=tc.resource_id,
+            language=tc.language,
+        )
+
+        def _route(text: str, metadata: dict) -> dict:
+            return orchestrator.route_direct(text, metadata=metadata)
+
+        engine = DictationEngine(
+            recorder, provider, _route, max_duration_sec=tc.max_duration_sec)
+        recorder.set_auto_stop_callback(engine.request_stop)
+        logger.info("builtin 听写引擎已启用（%s，资源 %s）",
+                    tc.base_url.rsplit("/", 1)[-1], tc.resource_id)
+        return engine
+    except Exception:  # noqa: BLE001 - 引擎组装失败不拖垮主程序
+        logger.exception("听写引擎组装失败（sounddevice/websocket 依赖缺失?）")
+        return None
 
 
 def run_web(config: Config, dashboard: Dashboard) -> None:

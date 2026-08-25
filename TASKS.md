@@ -93,14 +93,31 @@
 > 方向全景见 PLAN.md「V4」段；以下为可勾选执行明细。
 
 - [ ] **M11：最小闭环竖切**（录音 → 云 ASR → 直通路由，目标 2–4 个工作日）
-  - [ ] ① provider spike：**用户已有火山豆包（ASR）+ DeepSeek（润色）key，spike 首选实测
-    火山方舟 Ark OpenAI 兼容端点（`/api/v3/audio/transcriptions`）+ DeepSeek**；密钥位
-    已定 `config.local.json`（gitignore 覆盖，模板已建，transcription/polish 两段，
-    与种子 config 深度合并覆盖），端点/模型名以 spike 实测核对为准（Ark 若仅有旧版
-    AK/SK 形态则走 Provider 适配位）。
+  - [x] ① provider spike（2026-08-25 完成，协议/端点/鉴权全部查清并实测）：
+    - **火山 ASR 不走 Ark OpenAI 兼容端点**（`/api/v3/audio/transcriptions` 不存在），
+      正确路径 = 豆包语音 openspeech **WebSocket v3 二进制协议**：
+      `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream`（录完统一返回，
+      准确率优先，5s 音频 300–400ms 返回，**M11 首选**）/ `bigmodel_async`（双流优化）
+      / `bigmodel`（双向流式）。
+    - 鉴权（官方文档 docs/6561/1354869 + 1816214）：新版控制台只需
+      `X-Api-Key: <API Key>`（不填 appid）；旧版 = `X-Api-App-Key`(数字 APP ID) +
+      `X-Api-Access-Key`。`X-Api-Resource-Id: volc.seedasr.sauc.duration`
+      （豆包流式 2.0；1.0 是 volc.bigasr.sauc.*）。Ark Agent Plan 另有
+      `/api/v3/plan/sauc/*` 镜像端点（需专属 API Key）。
+    - 二进制帧协议已按文档实现并跑通到鉴权层（4B header + gzip JSON / raw PCM，
+      末包负包 flags=0b0010），探针实现可移植为 asr_client 骨架。
+    - **堵点**：用户现有 key（158 位点分 token，protobuf 内嵌 Key ID，格式为方舟系）
+      在 Ark 推理端点与全部语音网关均被拒（Invalid X-Api-Key / 401）→ key 当前无效
+      （禁用/轮换/或为闪电说中转 key）。**待用户在控制台核对或新建**：豆包语音新版
+      控制台 API Key 页（console.volcengine.com/speech/new/setting/apikeys，新用户含
+      免费试用礼包）拿一把新 key 换入 config.local.json 即可，其余全部就绪。
+    - 模型串 `Doubao_Seed_ASR_Streaming_2.0…` 非调用参数（resource id 才是）。
+    - DeepSeek 润色已实测可用（deepseek-v4-flash；httpx 需 trust_env=False 绕 socks 代理）。
   - [ ] ② config 扩展 `transcription` 段：engine（shandianshuo|builtin）/ provider /
-    base_url / model / language / 触发键 / VAD 参数；校验与原子写回沿 ConfigService；
-    密钥读环境变量（如 `VOICEHUB_ASR_API_KEY`）或 config.local.json，种子 config 不含密钥。
+    base_url（WS 地址，默认 sauc bigmodel_nostream）/ resource_id
+    （默认 volc.seedasr.sauc.duration）/ api_key / language / 触发键 / VAD 参数；
+    校验与原子写回沿 ConfigService；密钥读环境变量（如 `VOICEHUB_ASR_API_KEY`）或
+    config.local.json，种子 config 不含密钥。
   - [ ] ③ `recorder.py`：sounddevice 录音 + 纯逻辑状态机（idle→recording→processing，
     TDD）；两种停止模式（再按一次停止 / VAD 静音自动停）；WAV/临时文件生命周期管理。
   - [ ] ④ `asr_client.py`：httpx multipart 上传音频 → 文本；超时/重试/错误落日志；

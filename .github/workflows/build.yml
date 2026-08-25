@@ -35,6 +35,17 @@ jobs:
       - name: 打包 AppImage（V3/M10）
         run: bash packaging/build_linux.sh
 
+      # AppImage 冒烟（2026-08-25）：v0.3.0 Release 曾因 headless 环境下
+      # collect_submodules("pynput") 静默拿空表，产物缺热键后端却构建成功。
+      # xvfb 提供假 X，冒烟断言 pynput 热键真实注册 + 全链路由，杜绝回归。
+      - name: 安装冒烟所需系统依赖
+        run: sudo apt-get update && sudo apt-get install -y xclip xdotool xvfb
+
+      - name: AppImage 冒烟（xvfb 假 X，断言热键注册）
+        run: xvfb-run -a bash scripts/smoke_appimage.sh
+        env:
+          REPO: ${{ github.workspace }}
+
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:

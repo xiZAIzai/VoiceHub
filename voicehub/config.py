@@ -53,7 +53,9 @@ class Config:
     """全局配置，字段均有默认值，缺失 config.json 也能运行。"""
 
     server_host: str = "127.0.0.1"
-    server_port: int = 8000
+    # 默认 8765：8000 是 Triton（openKylin 自带 AI 推理服务 kytensor 即用）等
+    # 常见服务端口，2026-08-25 openKylin 实机实测 bind 冲突（uvicorn address in use）。
+    server_port: int = 8765
     trigger_key: str = "alt"
     # ADR-4 转录判定
     pending_timeout_sec: float = 30.0

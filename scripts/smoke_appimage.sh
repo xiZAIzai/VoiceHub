@@ -10,13 +10,17 @@
 # 用法：bash scripts/smoke_appimage.sh（需先 bash packaging/build_linux.sh 出产物）
 set -u
 
-REPO="${REPO:-/mnt/d/funs/VoiceHub}"
+REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 SMOKE=/tmp/voicehub-appimage-smoke
 TEXT="AppImage冒烟-$$"
 
 cleanup() {
     [ -n "${DAEMON_PID:-}" ] && kill "$DAEMON_PID" 2>/dev/null
     [ -n "${RECV_PID:-}" ] && kill "$RECV_PID" 2>/dev/null
+    # APPIMAGE_EXTRACT_AND_RUN 下 kill 运行时 PID 杀不到解包子进程（实测会残留占端口），
+    # 按解包路径兜底清杀
+    pkill -f "appimage_extracted_.*/VoiceHub" 2>/dev/null
+    pkill -f "appimage_extracted_.*/VoiceHubReceiver" 2>/dev/null
 }
 trap cleanup EXIT
 
@@ -63,6 +67,14 @@ for i in $(seq 1 30); do
     sleep 1
 done
 [ "$READY" = "1" ] && echo "  [PASS] 双 AppImage 服务就绪" || { echo "  [FAIL] 服务未就绪"; tail -5 "$SMOKE/daemon.log" "$SMOKE/recv.log"; exit 1; }
+
+echo "== 4.5) 热键后端注册校验（v0.3.0 曾因 headless 打包缺 pynput._xorg 而热键全灭） =="
+if grep -q "已注册 Linux 热键" "$SMOKE/logs/voicehub.log" 2>/dev/null; then
+    echo "  [PASS] pynput 热键后端已在包内注册"
+else
+    echo "  [FAIL] 未见「已注册 Linux 热键」（spec hiddenimports 回归？）"
+    tail -10 "$SMOKE/logs/voicehub.log"; exit 1
+fi
 
 echo "== 5) Alt+2 武装（xdotool keydown/keyup 序列） =="
 xdotool keydown alt; sleep 0.3; xdotool key 2; sleep 0.3; xdotool keyup alt

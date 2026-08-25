@@ -8,7 +8,7 @@ def test_default_config():
     """无 config.json 时字段取默认值。"""
     cfg = Config()
     assert cfg.server_host == "127.0.0.1"
-    assert cfg.server_port == 8000
+    assert cfg.server_port == 8765  # 默认避开 8000（openKylin kytensor/Triton 占用）
     assert cfg.pending_timeout_sec == 30.0
     assert cfg.stability_ms == 600
     assert cfg.targets == {}
@@ -47,4 +47,4 @@ def test_load_helper(tmp_path):
     """load() 便捷入口与 Config.load 等价。"""
     cfg_file = tmp_path / "c.json"
     cfg_file.write_text("{}", encoding="utf-8")
-    assert load(cfg_file).server_port == 8000
+    assert load(cfg_file).server_port == 8765

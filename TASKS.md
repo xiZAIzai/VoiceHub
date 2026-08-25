@@ -93,9 +93,11 @@
 > 方向全景见 PLAN.md「V4」段；以下为可勾选执行明细。
 
 - [ ] **M11：最小闭环竖切**（录音 → 云 ASR → 直通路由，目标 2–4 个工作日）
-  - [ ] ① provider spike：候选云 ASR（OpenAI 兼容 `/v1/audio/transcriptions` 体系优先：
-    智谱 / 讯飞 / 火山 / Deepgram / Groq 等），同一组中文短句实测延迟/准确性/价格，
-    定默认 provider 与 config 默认值；产出对比记录（可脚本化 `scripts/spark_asr_providers.sh`）。
+  - [ ] ① provider spike：**用户已有火山豆包（ASR）+ DeepSeek（润色）key，spike 首选实测
+    火山方舟 Ark OpenAI 兼容端点（`/api/v3/audio/transcriptions`）+ DeepSeek**；密钥位
+    已定 `config.local.json`（gitignore 覆盖，模板已建，transcription/polish 两段，
+    与种子 config 深度合并覆盖），端点/模型名以 spike 实测核对为准（Ark 若仅有旧版
+    AK/SK 形态则走 Provider 适配位）。
   - [ ] ② config 扩展 `transcription` 段：engine（shandianshuo|builtin）/ provider /
     base_url / model / language / 触发键 / VAD 参数；校验与原子写回沿 ConfigService；
     密钥读环境变量（如 `VOICEHUB_ASR_API_KEY`）或 config.local.json，种子 config 不含密钥。

@@ -61,12 +61,20 @@ Windows 下安装即用；非 Windows 环境自动跳过。
 
 **方式一：打包版（免 Python 环境，推荐）**
 
-从 [Releases](../../releases) 下载 zip（CI 自动构建），解压后：
+从 [Releases](../../releases) 下载（CI 自动构建），解压/赋权后：
 
-- 台式机：双击 `VoiceHub.exe`（托盘常驻 + 原生窗口仪表盘；`config.json` 在同目录可直接编辑，
+- 台式机（Windows）：双击 `VoiceHub.exe`（托盘常驻 + 原生窗口仪表盘；`config.json` 在同目录可直接编辑，
   也可在仪表盘「设置」页改；托盘可勾选开机自启）。日志在 `logs\voicehub.log`。
-- 笔记本：双击 `VoiceHubReceiver.exe`（默认名称 `laptop`；与 config 的 target key 不同时，
+- 笔记本（Windows）：双击 `VoiceHubReceiver.exe`（默认名称 `laptop`；与 config 的 target key 不同时，
   给快捷方式加参数 `--name <key>`）。
+- **Linux（V3）**：主控 `VoiceHub-x86_64.AppImage`、接收端 `VoiceHubReceiver-x86_64.AppImage`
+  （Ubuntu 22.04 构建，openKylin 等兼容发行版可用）：
+
+  ```bash
+  sudo apt install xclip xdotool      # 运行期系统依赖（AppRun 启动时也会检测提示）
+  chmod +x VoiceHub-x86_64.AppImage
+  ./VoiceHub-x86_64.AppImage          # config/db/logs 锚定 AppImage 旁边，首启自动播种 config
+  ```
 
 **方式二：源码运行**
 
@@ -115,10 +123,16 @@ python -m voicehub.main
 python -m pytest          # 单元测试
 packaging\build_daemon.bat     # 构建主控 exe → dist\VoiceHub\
 packaging\build_receiver.bat   # 构建接收端 exe → dist\VoiceHubReceiver\
-python scripts/make_icon.py    # 重新生成应用图标 assets/voicehub.ico
+bash packaging/build_linux.sh  # Linux：测试 + 构建双 AppImage → dist/*.AppImage
+python scripts/make_icon.py    # 重新生成应用图标 assets/voicehub.ico + voicehub.png
 ```
 
-CI（GitHub Actions）在 push / PR 时自动跑测试并构建双 exe，打 `v*` tag 发布 Release。
+CI（GitHub Actions）在 push / PR 时自动跑测试（Windows + Linux）并构建 Windows 双 exe +
+Linux 双 AppImage，打 `v*` tag 发布 Release。
+
+Linux 开发/验证环境为 WSL2 Ubuntu 22.04（与 CI runner 一致）；验证工具：
+`scripts/spike_linux_stack.sh`（输入栈）、`scripts/smoke_linux_e2e.sh`（源码全链冒烟）、
+`scripts/smoke_appimage.sh`（AppImage 冒烟）。
 
 文档：[PLAN.md](./PLAN.md)（规划与 ADR）· [TASKS.md](./TASKS.md)（任务）· [docs/PRD.md](./docs/PRD.md)（需求）· [CLAUDE.md](./CLAUDE.md)（工作规范）
 

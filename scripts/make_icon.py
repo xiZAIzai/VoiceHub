@@ -31,13 +31,18 @@ def _draw(size: int) -> Image.Image:
 
 
 def main() -> None:
-    out = Path(__file__).resolve().parent.parent / "assets" / "voicehub.ico"
-    out.parent.mkdir(exist_ok=True)
+    out_dir = Path(__file__).resolve().parent.parent / "assets"
+    out_dir.mkdir(exist_ok=True)
     sizes = [16, 24, 32, 48, 64, 128, 256]
     imgs = [_draw(s) for s in sizes]
-    imgs[-1].save(out, format="ICO", sizes=[(s, s) for s in sizes],
+    ico = out_dir / "voicehub.ico"
+    imgs[-1].save(ico, format="ICO", sizes=[(s, s) for s in sizes],
                   append_images=imgs[:-1])
-    print(f"已生成 {out}")
+    print(f"已生成 {ico}")
+    # PNG（256）：Linux AppImage 的 .desktop / appimagetool 图标用（V3/M10）
+    png = out_dir / "voicehub.png"
+    imgs[-1].save(png, format="PNG")
+    print(f"已生成 {png}")
 
 
 if __name__ == "__main__":

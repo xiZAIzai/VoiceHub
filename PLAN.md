@@ -1,7 +1,7 @@
 # VoiceHub 项目规划
 
-> 最后更新：2026-08-20（**M6 / V2 完成并归档**：exe 打包 + 配置界面 + 原生窗口 + 自启 + 开源工程化）
-> 当前焦点：V2 用户侧验证（窗口交互 / Actions 首跑 / 笔记本实机）；V1 尾巴：平板部署
+> 最后更新：2026-08-20（V3/M10 核心：**双 AppImage 打包完成 + WSL 冒烟全绿**；余 push → CI 首跑 → v0.3.0）
+> 当前焦点：push 验证 CI（linux 打包 job 首跑）→ 发 v0.3.0；M9 简化为随用随做；V2 用户侧验证随用随验；V1 尾巴：平板部署
 
 ## 产品目标
 
@@ -20,6 +20,18 @@
 - **V2 已完成并归档（M6，2026-08-20）**：双击即用 exe（daemon/receiver）+ 配置界面 +
   pywebview 原生窗口 + 开机自启 + 开源工程化（MIT/CI/Release）；94 单测全绿，
   真机修复白屏/僵尸进程/关窗语义三事故。详见 [docs/tasks-archive/v2-completed.md](./docs/tasks-archive/v2-completed.md)。
+- **V3 已立项（2026-08-20）**：Linux 双端适配——openKylin SP2 主控（与 Windows 双系统分时共存，
+  同一物理机无双主控冲突）+ Linux 接收端体验。契机：闪电说 Linux 版（AppImage universal，内测
+  v0.7.5）使转写源跨平台，零侵入架构（ADR-1/4/5）原样延续；自建转写管道转为挂起的远期方向
+  （见 ADR-7 占位）。里程碑 M7–M10，见「当前里程碑」。
+- **V3 先行项完成（2026-08-20，开发基准 Ubuntu 22.04 / WSL2）**：CI 加 linux job；
+  `linux_backend.py`（xclip 读取 + 武装期轮询监听 + pynput 热键降级）落地，测试 94→104，
+  Windows/WSL 双平台全绿；WSL 端到端冒烟全绿（热键武装→剪贴板拦截→路由→接收端粘贴→落库）。
+  可复用工具：`scripts/spike_linux_stack.sh`、`scripts/smoke_linux_e2e.sh`。
+- **V3 验证策略定案（2026-08-20，用户决策）**：**取消 openKylin 真机前置验证**——依据历史经验
+  （Ubuntu 22.04 构建的 AppImage 在 openKylin 均可正常运行；AppImage 自包含，glibc 向后兼容），
+  以 AppImage 产物交付，openKylin 差异随用随修。**WSL2 为唯一开发/验证环境，直至 AppImage 打包
+  完成**；闪电说 Linux 版行为四问转为 WSLg 内选做，不阻塞主线。ADR-7 就此定案。
 
 当前主要风险：
 
@@ -88,20 +100,63 @@
   注册表真机回环验证；重启实测转用户侧）。
 - ~~开源工程化：README、License、GitHub Actions 自动构建~~ ✅ 2026-08-20
   （MIT + CI 构建/发布工作流 + README 打包版说明；Actions 首跑与首发 tag 转用户侧）。
-- 接收端 receiver 打包（笔记本双击即用；平板维持 Termux 脚本）。
-- 配置界面：config 读写 API + 仪表盘"设置"页。
-- pywebview 原生窗口包裹仪表盘（关窗不退程序，退出走托盘）。
-- 托盘开机自启实测。
-- 开源工程化：README、License、GitHub Actions 自动构建。
+
+### ✅ Milestone 7（V3）：Linux 预研与选型（2026-08-20 定案）
+
+> ~~真机：openKylin SP2~~ 验证策略变更（2026-08-20 用户决策）：取消 openKylin 真机前置验证，
+> WSL2 为唯一验证环境（理由见「当前状态」），选型据此定案。
+
+- ~~输入栈 spike（WSL 可先行）~~ ✅ 2026-08-20（xclip UTF-8 读写 / xdotool 注入 / pynput 热键
+  均真跑验证；`scripts/spike_linux_stack.sh`）。
+- ~~openKylin 真机三确认 + 闪电说四问~~ 取消（策略变更）；闪电说 AppImage 行为四问转为
+  WSLg 内**选做**（不阻塞主线，遇到问题随用随修）。
+- ~~产出 ADR-7~~ ✅ 定案（见 ADR 索引）。
+
+### 🔶 Milestone 8（V3）：Linux 主控后端
+
+- ~~`linux_backend.py`（对位 win_backend）~~ ✅ 2026-08-20（实现 + 双平台 104 测试全绿 +
+  WSL 端到端冒烟全绿，见 TASKS.md 先行项记录）。
+- ~~全链路真机联调~~ 改为 WSL 内完成 ✅ 2026-08-20（原 openKylin 真机项随策略变更取消）。
+- AppImage 形态验证（随 M10 打包一并做）：AppImage 版 daemon 在 WSL 复跑冒烟脚本。
+- 双系统数据连续性（可选）：config/db 放共享分区（NTFS/exFAT）方案与文档。
+
+### ⏳ Milestone 9（V3）：接收端 Linux 体验完善
+
+- 粘贴后端补齐（X11 优先；Wayland wl-copy + ydotool 按需）。
+- systemd user service + 一键安装脚本（依赖检查 + 服务装卸 + 自启）。
+- README「Linux 接收端」章节。
+
+### 🔶 Milestone 10（V3）：工程化收尾与 v0.3.0（AppImage 打包提前启动，2026-08-20）
+
+- ~~daemon / receiver 打包为 AppImage~~ ✅ 2026-08-20（`packaging/build_linux.sh` 一键链：
+  PyInstaller one-dir → AppRun/.desktop/PNG → appimagetool；产物 24M/16M；AppRun 播种
+  config + 依赖检测，`paths.py` 新增 `VOICEHUB_HOME` 便携目录锚定；AppImage 冒烟
+  `scripts/smoke_appimage.sh` 全绿，见 TASKS.md M10 记录）。
+- ~~CI ubuntu job 扩展打包并上传产物~~ ✅ 2026-08-20（push/PR 传 artifact；tag 时 AppImage
+  随 zip 一起发 Release；**待 push 后首跑验证**）。
+- 发 v0.3.0 Release（待 CI 全绿后），文档收口归档。
+
+### ⏳ V4（远期占位，未立项）：自建转写内核（2026-08-20 方向登记）
+
+> 仅登记方向，核心内容未定案，待 V3 收尾或中途再细化讨论。即 ADR-7 中"自建转写管道
+> 挂起的远期方向"，此处正式占位为 V4。
+
+- 动机：转写源依赖闪电说（闭源商业软件，收费 + Pro 会员分层），开源项目自主可控受制于人。
+- 核心：自建转写内核（录音 → ASR → LLM 润色 → 写剪贴板），核心逻辑比闪电说更流畅，
+  配置更完善、可自定义（闪电说现有配置较草率）。
+- 增值方向（依赖自建内核方可做）：接入记忆系统与项目管理系统，按项目隔离管理对话/转写历史。
+- 与 V3 的关系：V3（M7–M10）仍走闪电说零侵入路线，两者不冲突；自建内核落地时可引入
+  转写源抽象（shandianshuo | builtin）与闪电说平滑共存/切换。
 
 ## 近阶段工作重点
 
-1. ~~M0 记录结构奠基~~ ✅ 2026-08-19。
-2. ~~v1 代码实现（M2-M4 代码 + 编排/路由/存储/仪表盘）~~ ✅ 2026-08-19（65 单测全绿）。
-3. ~~Windows 真机验证：装 Windows Python → 跑 `python -m voicehub.main` 验证热键/剪贴板/托盘~~ ✅ 2026-08-20（全链路交互式验证通过）。
-4. 真机联调：✅ 笔记本（2026-08-20）；⏳ 平板接收端部署，验证自动发现 → 路由 → 粘贴。
-5. ~~V2 桌面化（M6）~~ ✅ 2026-08-20（六项完成并归档）；剩用户侧验证：窗口三步交互 /
-   Actions 首跑 + `v0.2.0` Release / 笔记本 receiver 实机（见 TASKS.md「V2 收尾」）。
+1. ~~V3 先行项（Ubuntu 22.04 基准，本机 WSL2）~~ ✅ 2026-08-20。
+2. ~~M7 预研与选型~~ ✅ 2026-08-20 定案（ADR-7，验证策略见上）。
+3. ~~M8 Linux 主控后端 + WSL 全链~~ ✅ 2026-08-20。
+4. ~~M10 AppImage 打包 + 冒烟 + CI 扩展~~ ✅ 2026-08-20（余 push 后 CI 首跑验证）。
+5. push → CI 双平台全绿 → 打 v0.3.0（AppImage + Windows zip 首次同发）。
+6. M9 接收端体验随用随做（systemd/自启脚本可选，AppImage 已是主交付形态）。
+7. V2 收尾用户侧验证随用随验；V1 尾巴（平板）按需再启。
 
 ## 架构约束（精简版）
 
@@ -119,6 +174,7 @@
 3. ~~设备发现~~ ✅ 已定案（2026-08-19）：DHCP 保留 + 固定 IP 端点，见 ADR-2。
 4. ~~ESP32 兜底通道~~ ⏸ 挂起（M5 或按需再议）：BLE HID 固件选型与串口协议，不影响第一版。
 5. ~~闪电说自动粘贴 vs 远程路由撞车~~ ✅ 已定案（2026-08-19）：保留原生 + 接受远程本地重复，见 ADR-5。
+6. ~~Linux 输入栈选型~~ ⏳ 待 M7 真机预研定案（热键 / 剪贴板监听 / 粘贴注入），记入 ADR-7。
 
 ## 关键 ADR 索引
 
@@ -174,6 +230,20 @@
   包进原生窗口（ADR-3 预留路径，关窗不退程序、退出走托盘）。明确**不做** Tauri/Electron
   独立前端工程：双工具链/双进程/贡献门槛高，对个人工具过重（ADR-3 的理由依然成立），
   等确有重度定制 UI 需求再议。
+
+- **ADR-7 Linux 输入栈选型（2026-08-20 定案）**
+  选型：剪贴板读写 = **xclip**（显式 UTF-8，防无 LANG 环境中文乱码）；变化监听 = **X11 轮询**
+  （`X11ClipboardPoller`，仅武装期轮询，空闲零开销；武装沿登记基线防假事件）；粘贴注入 =
+  **xdotool**；全局热键 = **pynput**（不可用时降级日志，仪表盘照常）。以上均已在 WSL2
+  Ubuntu 22.04 真跑验证（spike + 端到端冒烟全绿；工具 `scripts/spike_linux_stack.sh` /
+  `scripts/smoke_linux_e2e.sh`）。
+  验证策略（用户决策 2026-08-20）：**取消 openKylin 真机前置验证**——依据历史经验（Ubuntu
+  22.04 构建的 AppImage 在 openKylin 均可正常运行，AppImage 自包含 + glibc 向后兼容），
+  以 AppImage 产物交付，openKylin 差异随用随修；WSL2 为唯一开发/验证环境。
+  前提变化记录（2026-08-20，V3 立项）：闪电说 Linux 版（AppImage universal，内测 v0.7.5）出现后，
+  V3 从"自建转写管道（换心脏）"回归为"零侵入移植"——ADR-1/4/5 原样延续。**自建转写管道
+  转为挂起的远期方向**（保留价值：彻底消除 ADR-4 武装期误判与 ADR-5 本地重复贴；
+  闪电说三平台齐备后必要性大降；2026-08-20 已登记为 V4 方向，见「V4（远期占位）」段）。
 
 ## 参考
 

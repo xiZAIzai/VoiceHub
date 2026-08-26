@@ -106,11 +106,15 @@
       `/api/v3/plan/sauc/*` 镜像端点（需专属 API Key）。
     - 二进制帧协议已按文档实现并跑通到鉴权层（4B header + gzip JSON / raw PCM，
       末包负包 flags=0b0010），探针实现可移植为 asr_client 骨架。
-    - **堵点**：用户现有 key（158 位点分 token，protobuf 内嵌 Key ID，格式为方舟系）
-      在 Ark 推理端点与全部语音网关均被拒（Invalid X-Api-Key / 401）→ key 当前无效
-      （禁用/轮换/或为闪电说中转 key）。**待用户在控制台核对或新建**：豆包语音新版
-      控制台 API Key 页（console.volcengine.com/speech/new/setting/apikeys，新用户含
-      免费试用礼包）拿一把新 key 换入 config.local.json 即可，其余全部就绪。
+    - **鉴权定案（2026-08-26 用户补旧版三件套后实测打通 ✅）**：火山豆包 ASR 双鉴权
+      方案并存——旧版控制台 `app_key`（数字 APP ID）+ `access_key`（Access Token）
+      双头（**实测用户凭证可用**，Secret Key 为另一套 REST API 的 HMAC 签名用，
+      WS 鉴权不需要）；新版控制台 `api_key` 单头（X-Api-Key，用户先前 158 位
+      点分 key 在所有网关被判 Invalid，已弃用）。注意 `sauc/bigmodel`（双向基础版）
+      端点对 seedasr 资源返回 not allowed——豆包 2.0 实际只开放 nostream/async
+      两个端点（与闪电说二进制硬编码一致），默认 nostream。真语音验收：服务端
+      duration 对账一致（942ms→942ms），识别管线畅通；旧 key（158 位方舟系 token）
+      结论无效勿再用。
     - 模型串 `Doubao_Seed_ASR_Streaming_2.0…` 非调用参数（resource id 才是）。
     - DeepSeek 润色已实测可用（deepseek-v4-flash；httpx 需 trust_env=False 绕 socks 代理）。
   - [x] ② config 扩展 `transcription` 段 ✅ 2026-08-26：TranscriptionConfig
@@ -135,9 +139,12 @@
     openKylin 实机冒烟：麦克风采集 ✓（环境底噪 RMS 0.0002）/ VAD 4s 自动停 ✓ /
     引擎全循环 ✓（ASR 到服务端鉴权层，key 无效止于 401 错误路径，无崩溃）/ 直通路由
     →剪贴板+DB 落库(10ms) ✓ / 托盘 DBus 点击触发录音 ✓ / 热键触发 ✓。
-  - [ ] ⑧ openKylin 实机验收（**待有效 API key**）：不装闪电说，说一句话 → 识别文本
-    → 剪贴板/远端路由 → 仪表盘可见记录。换 key 后一条命令复验：
-    `python scripts/spike/volc_asr_v3_probe.py` 输出「✅ 鉴权+协议全链路通」即可人工验收。
+  - [x] ⑧ openKylin 实机验收 ✅ 2026-08-26（机器侧全过，用户侧一句话待确认）：
+    旧版凭证打通后，生产版 asr_client 真服务端验证（942ms 音频 duration 对账一致）；
+    桌面 AppImage（42MB，含听写内核）+ 桌面 config.local.json（旧版凭证）实测：
+    引擎启用 ✓ 听写热键 ✓ 合成键触发完整录音循环 ✓；单测 157 全绿、AppImage 冒烟
+    6 PASS。**剩余一步**：用户退出旧托盘实例 → 双击桌面新 AppImage → 托盘「开始
+    听写」（或 Ctrl+Alt+V）说一句话 → Ctrl+V 验证剪贴板文本 + 仪表盘记录可见。
 - [ ] **M12：体验完善**（润色 / 状态可视化 / Wayland 稳触发）
   - [ ] LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
   - [ ] 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态。

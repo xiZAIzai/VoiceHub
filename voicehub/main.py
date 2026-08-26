@@ -131,16 +131,18 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
     """
     if config.transcription.engine != "builtin":
         return None
-    if not config.transcription.api_key:
-        logger.warning("transcription.engine=builtin 但未配置 api_key"
-                       "（config.local.json 或 VOICEHUB_ASR_API_KEY），听写不可用")
+    tc = config.transcription
+    has_credential = tc.api_key or (tc.app_key and tc.access_key)
+    if not has_credential:
+        logger.warning("transcription.engine=builtin 但未配置 ASR 凭证"
+                       "（api_key 或 app_key+access_key，走 config.local.json 或环境变量），"
+                       "听写不可用")
         return None
     try:
         from .dictation import DictationEngine, VadTracker
         from .dictation.asr_client import VolcengineSaucClient
         from .dictation.recorder import MicrophoneRecorder
 
-        tc = config.transcription
         vad = VadTracker(
             silence_ms=tc.vad_silence_ms,
             threshold=tc.vad_threshold,
@@ -150,6 +152,8 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
         recorder = MicrophoneRecorder(sample_rate=tc.sample_rate, vad=vad)
         provider = VolcengineSaucClient(
             api_key=tc.api_key,
+            app_key=tc.app_key,
+            access_key=tc.access_key,
             base_url=tc.base_url,
             resource_id=tc.resource_id,
             language=tc.language,

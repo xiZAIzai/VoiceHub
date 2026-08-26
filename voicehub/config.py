@@ -63,7 +63,13 @@ class TranscriptionConfig:
     provider: str = "volcengine_sauc"
     base_url: str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
     resource_id: str = "volc.seedasr.sauc.duration"
+    # 鉴权二选一（2026-08-26 实测定案）：
+    # - 新版控制台：api_key 单头（X-Api-Key）
+    # - 旧版控制台：app_key（数字 APP ID）+ access_key（Access Token）双头；
+    #   Secret Key 是 open API 的 HMAC 签名用，WS 鉴权不需要
     api_key: str = ""
+    app_key: str = ""
+    access_key: str = ""
     language: str = "auto"
     # builtin 独立触发键（pynput/keyboard 组合格式，空 = 禁用热键，托盘菜单仍可用）
     trigger_key: str = "ctrl+alt+v"
@@ -92,6 +98,8 @@ class TranscriptionConfig:
         cfg.base_url = str(data.get("base_url", cfg.base_url))
         cfg.resource_id = str(data.get("resource_id", cfg.resource_id))
         cfg.api_key = str(data.get("api_key", cfg.api_key))
+        cfg.app_key = str(data.get("app_key", cfg.app_key))
+        cfg.access_key = str(data.get("access_key", cfg.access_key))
         cfg.language = str(data.get("language", cfg.language))
         cfg.trigger_key = str(data.get("trigger_key", cfg.trigger_key))
         cfg.default_target = str(data.get("default_target", cfg.default_target))
@@ -155,10 +163,17 @@ class Config:
                 # 本地配置损坏不阻塞启动（退回仅种子配置），但要可见
                 import logging
                 logging.getLogger(__name__).warning("config.local.json 解析失败，已忽略: %s", e)
-        # 环境变量密钥最高优先级（CI/容器场景）
+        # 环境变量密钥最高优先级（CI/容器场景；新旧鉴权方案各一组）
         env_key = os.environ.get("VOICEHUB_ASR_API_KEY")
         if env_key:
             raw = deep_merge(raw, {"transcription": {"api_key": env_key}})
+        env_legacy = {}
+        if os.environ.get("VOICEHUB_ASR_APP_KEY"):
+            env_legacy["app_key"] = os.environ["VOICEHUB_ASR_APP_KEY"]
+        if os.environ.get("VOICEHUB_ASR_ACCESS_KEY"):
+            env_legacy["access_key"] = os.environ["VOICEHUB_ASR_ACCESS_KEY"]
+        if env_legacy:
+            raw = deep_merge(raw, {"transcription": env_legacy})
         cfg._apply(raw)
         return cfg
 

@@ -308,8 +308,10 @@
   glibc 2.39 基线过高（调查见 TASKS.md V3），语音链路单点依赖被打破，V4 由远期占位升格立项。
   - **ASR 统一走云**（用户决策 2026-08-25；本地模型明确不做）：~~优先 OpenAI 兼容
     `/v1/audio/transcriptions` 接口体系~~ spike 证伪——火山豆包 ASR 实为 **openspeech
-    WebSocket v3 二进制协议**（默认 `sauc/bigmodel_nostream`，X-Api-Key 单头鉴权，
-    resource id `volc.seedasr.sauc.duration`），详见 TASKS.md M11-①；AsrProvider 协议
+    WebSocket v3 二进制协议**（默认 `sauc/bigmodel_nostream`，resource id
+    `volc.seedasr.sauc.duration`）。鉴权双方案（2026-08-26 实测定案）：旧版控制台
+    app_key+access_key 双头（用户凭证实测可用）| 新版控制台 X-Api-Key 单头；
+    豆包 2.0 仅开放 nostream/async 端点。详见 TASKS.md M11-①；AsrProvider 协议
     留多厂商适配位。
   - **直通注入**：内置引擎转写文本走 `orchestrator.route_direct()`，不经剪贴板——
     ADR-4 武装期误判、ADR-5 本地重复贴对内置引擎天然免疫；剪贴板链路原样保留给闪电说引擎。

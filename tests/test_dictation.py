@@ -387,3 +387,29 @@ def test_engine_skips_asr_when_vad_says_no_speech():
     _wait_idle(engine)
     assert routed == [] and prov.calls == []  # ASR 未被调用
     assert "未检测到语音" in engine.last_result()["error"]
+
+
+# ---------- 双鉴权方案（2026-08-26 旧版控制台凭证实测定案） ----------
+
+def test_client_headers_legacy_scheme_preferred():
+    client = VolcengineSaucClient(api_key="new-key", app_key="1234567890",
+                                  access_key="legacy-token")
+    h = client._headers()
+    assert h["X-Api-App-Key"] == "1234567890"
+    assert h["X-Api-Access-Key"] == "legacy-token"
+    assert "X-Api-Key" not in h  # 旧版方案时不发新版头
+    assert h["X-Api-Resource-Id"] == "volc.seedasr.sauc.duration"
+
+
+def test_client_headers_new_console_scheme():
+    client = VolcengineSaucClient(api_key="new-key")
+    h = client._headers()
+    assert h["X-Api-Key"] == "new-key"
+    assert "X-Api-App-Key" not in h and "X-Api-Access-Key" not in h
+
+
+def test_client_missing_credentials_raises():
+    with pytest.raises(AsrError):
+        VolcengineSaucClient()
+    with pytest.raises(AsrError):
+        VolcengineSaucClient(app_key="only-app-key")

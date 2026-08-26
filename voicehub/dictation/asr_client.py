@@ -99,7 +99,7 @@ class VolcengineSaucClient:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str = "",
         base_url: str = DEFAULT_URL,
         resource_id: str = DEFAULT_RESOURCE_ID,
         language: str = "auto",
@@ -108,8 +108,16 @@ class VolcengineSaucClient:
         chunk_ms: int = 200,
         chunk_pause_sec: float = 0.02,
         connect: Optional[Callable[[str, dict], object]] = None,
+        app_key: str = "",
+        access_key: str = "",
     ) -> None:
+        # 鉴权二选一（2026-08-26 实测）：旧版控制台 app_key+access_key 优先，
+        # 新版控制台 api_key 单头；都没有时调用即抛错
         self._api_key = api_key
+        self._app_key = app_key
+        self._access_key = access_key
+        if not (self._app_key and self._access_key) and not self._api_key:
+            raise AsrError("缺少 ASR 凭证（api_key 或 app_key+access_key）")
         self._url = base_url
         self._resource_id = resource_id
         self._language = language
@@ -147,11 +155,14 @@ class VolcengineSaucClient:
                 pass
 
     def _headers(self) -> dict:
-        return {
-            "X-Api-Key": self._api_key,
-            "X-Api-Resource-Id": self._resource_id,
-            "X-Api-Connect-Id": str(uuid.uuid4()),
-        }
+        headers = {"X-Api-Resource-Id": self._resource_id,
+                   "X-Api-Connect-Id": str(uuid.uuid4())}
+        if self._app_key and self._access_key:  # 旧版控制台（2026-08-26 实测可用）
+            headers["X-Api-App-Key"] = self._app_key
+            headers["X-Api-Access-Key"] = self._access_key
+        else:  # 新版控制台单头
+            headers["X-Api-Key"] = self._api_key
+        return headers
 
     def _send_audio(self, ws, pcm: bytes) -> None:
         for i in range(0, len(pcm), self._chunk_bytes):

@@ -18,9 +18,11 @@ cleanup() {
     [ -n "${DAEMON_PID:-}" ] && kill "$DAEMON_PID" 2>/dev/null
     [ -n "${RECV_PID:-}" ] && kill "$RECV_PID" 2>/dev/null
     # APPIMAGE_EXTRACT_AND_RUN 下 kill 运行时 PID 杀不到解包子进程（实测会残留占端口），
-    # 按解包路径兜底清杀
-    pkill -f "appimage_extracted_.*/VoiceHub" 2>/dev/null
-    pkill -f "appimage_extracted_.*/VoiceHubReceiver" 2>/dev/null
+    # 按解包路径兜底清杀。⚠️ 必须锚定本冒烟目录（SMOKE 环境变量展开在解包路径里），
+    # 宽匹配 "appimage_extracted_.*/VoiceHub" 会误杀用户正在运行的正式实例
+    # （2026-08-26 实机事故：用户托盘实例被冒烟清理带走）
+    pkill -f "$SMOKE.*appimage_extracted_.*/VoiceHub" 2>/dev/null
+    pkill -f "$SMOKE.*appimage_extracted_.*/VoiceHubReceiver" 2>/dev/null
 }
 trap cleanup EXIT
 

@@ -74,6 +74,7 @@ class Dashboard:
         discovery: Optional[object] = None,
         hotkey: Optional[object] = None,
         settings: Optional[ConfigService] = None,
+        dictation: Optional[object] = None,
     ) -> None:
         self._config = config
         self._storage = storage
@@ -81,6 +82,7 @@ class Dashboard:
         self._discovery = discovery
         self._hotkey = hotkey
         self._settings = settings
+        self._dictation = dictation
 
     def state(self) -> dict[str, Any]:
         return collect_state(self._config, self._sticky, self._discovery, self._hotkey)
@@ -110,6 +112,24 @@ class Dashboard:
             if self._settings is None:
                 return {"ok": False, "error": "本实例未启用配置服务"}
             return self._settings.get()
+
+        @app.post("/api/dictate/toggle")
+        def api_dictate_toggle():
+            """听写触发（V4/M11 Wayland 热键方案）：系统快捷键调 CLI --
+            dictate，CLI 回调本端点；也可供自动化/测试使用。"""
+            if self._dictation is None:
+                return {"ok": False, "error": "builtin 听写引擎未启用"}
+            state = self._dictation.toggle()
+            return {"ok": True, "state": state}
+
+        @app.get("/api/dictate/status")
+        def api_dictate_status():
+            """听写引擎当前状态 + 最近一次结果。"""
+            if self._dictation is None:
+                return {"ok": False, "state": "disabled"}
+            result = self._dictation.last_result()
+            return {"ok": True, "state": self._dictation.state(),
+                    "last_result": result}
 
         @app.put("/api/config")
         async def api_config_put(req: Request):

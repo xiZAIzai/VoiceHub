@@ -261,3 +261,40 @@ def test_build_dictation_assembles_engine(tmp_path, monkeypatch):
     engine = build_dictation(cfg, None)
     assert engine is not None
     assert engine.state() == "idle"
+
+
+# ---------- 状态可视化（V4/M11 补：图标变色 + 桌面通知） ----------
+
+def test_notifier_chains_replaces_id():
+    from voicehub.notify import DesktopNotifier
+
+    sent = []
+
+    def fake_sender(summary, body, timeout_ms, replaces_id):
+        sent.append((summary, replaces_id))
+        return len(sent) * 100
+
+    n = DesktopNotifier(sender=fake_sender)
+    n.send("第一条")
+    n.send("第二条")
+    assert sent == [("第一条", 0), ("第二条", 100)]  # 连续发送替换上一条横幅
+
+
+def test_notifier_dbus_failure_degrades_to_zero():
+    from voicehub.notify import DesktopNotifier
+
+    n = DesktopNotifier(sender=lambda *a: (_ for _ in ()).throw(OSError("no bus")))
+    assert n.send("x") == 0  # 发送失败降级为 0，不抛出
+
+
+def test_tray_dictation_state_swaps_pixmap():
+    from voicehub.linux_tray import LinuxTray
+
+    tray = LinuxTray(on_open=lambda: None, on_quit=lambda: None,
+                     on_dictate=lambda: None)
+    tray.set_dictation_state(True)
+    assert tray._pixmap == tray._pixmap_recording  # noqa: SLF001 - 录音中红图标
+    assert "录音中" in tray._title  # noqa: SLF001
+    tray.set_dictation_state(False)
+    assert tray._pixmap == tray._pixmap_normal  # noqa: SLF001
+    assert tray._title == "VoiceHub"  # noqa: SLF001

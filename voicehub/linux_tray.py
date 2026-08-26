@@ -158,6 +158,18 @@ def load_icon_pixmap(size: int = ICON_SIZE_PX) -> Optional[tuple[int, int, bytes
     return argb32_pixmap(img.tobytes(), size, size)
 
 
+def recording_icon_pixmap(size: int = ICON_SIZE_PX) -> Optional[tuple[int, int, bytes]]:
+    """录音态图标：红底白点（V4/M11 状态可视化——录音中托盘变红）。"""
+    try:
+        from PIL import Image, ImageDraw
+    except Exception:  # noqa: BLE001
+        return None
+    img = Image.new("RGBA", (size, size), (220, 38, 38, 255))
+    m = size // 4
+    ImageDraw.Draw(img).ellipse((m, m, size - m, size - m), fill=(255, 255, 255, 255))
+    return argb32_pixmap(img.tobytes(), size, size)
+
+
 def _import_dbus() -> SimpleNamespace:
     """延迟导入 jeepney（requirements 仅 linux 标记安装），打成一个命名空间传参。
 
@@ -184,22 +196,32 @@ class LinuxTray:
                  on_dictate: Optional[Callable[[], None]] = None,
                  title: str = "VoiceHub", description: str = "语音转写多设备分发") -> None:
         self._menu = MenuModel(on_open=on_open, on_quit=on_quit, on_dictate=on_dictate)
+        self._base_title = title
         self._title = title
         self._description = description
         self._pixmap: Optional[tuple[int, int, bytes]] = None
+        self._pixmap_normal: Optional[tuple[int, int, bytes]] = None
+        self._pixmap_recording: Optional[tuple[int, int, bytes]] = None
+        self._recording = False
         self._revision = 1  # dbusmenu 版本号（标签更新时自增）
         self._bus_name = ""
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._dbus: Optional[SimpleNamespace] = None
-        self._conn = None  # 服务线程持有的连接（LayoutUpdated 信号用）
+        self._conn = None  # 服务线程持有的连接（信号广播用）
 
     # ---------- 生命周期 ----------
     def start(self) -> None:
         """起托盘线程（图标加载失败不阻塞，仅影响图标显示）。"""
-        self._pixmap = load_icon_pixmap()
+        self._ensure_pixmaps()
+        self._pixmap = (self._pixmap_recording if self._recording
+                        else self._base_pixmap())
         self._thread = threading.Thread(target=self._run, name="linux-tray", daemon=True)
         self._thread.start()
+
+    def _ensure_pixmaps(self) -> None:
+        if self._pixmap_recording is None:
+            self._pixmap_recording = recording_icon_pixmap()
 
     def stop(self) -> None:
         self._stop.set()
@@ -207,13 +229,41 @@ class LinuxTray:
         if t is not None and t.is_alive():
             t.join(timeout=2)
 
-    # ---------- 听写状态（V4/M11：菜单标签 开/停 切换） ----------
+    # ---------- 听写状态（V4/M11：标签 + 图标变色双反馈） ----------
     def set_dictation_state(self, recording: bool) -> None:
-        """录音中 → 「停止听写」，否则「开始听写」；面板下次打开菜单即见新标签。"""
+        """录音中 → 菜单「停止听写」+ 图标变红 + Title 提示；结束后还原。"""
+        self._recording = recording
+        self._ensure_pixmaps()
         label = "停止听写" if recording else "开始听写"
         self._menu.set_label(MENU_ID_DICTATE, label)
+        self._title = f"{self._base_title}（录音中）" if recording else self._base_title
+        self._pixmap = (self._pixmap_recording if recording and self._pixmap_recording
+                        else self._base_pixmap())
         self._revision += 1
         self._emit_layout_updated()
+        self._emit_properties_changed({
+            "Title": ("s", self._title),
+            "IconPixmap": ("a(iiay)", [self._pixmap] if self._pixmap else []),
+        })
+
+    def _base_pixmap(self) -> Optional[tuple[int, int, bytes]]:
+        """常态图标（首次用到时加载缓存）。"""
+        if self._pixmap_normal is None:
+            self._pixmap_normal = load_icon_pixmap()
+        return self._pixmap_normal
+
+    def _emit_properties_changed(self, changed: dict) -> None:
+        """广播 SNI 属性变化（图标/标题），面板实时刷新不必重开菜单。"""
+        db, conn = self._dbus, self._conn
+        if db is None or conn is None:
+            return
+        try:
+            sig = db.new_signal(db.DBusAddress(ITEM_PATH, "", PROPS_IFACE),
+                                "PropertiesChanged", "sa{sv}as",
+                                (SNI_IFACE, changed, []))
+            conn.send_message(sig)
+        except Exception:  # noqa: BLE001 - 信号失败仅降级为下次拉取
+            logger.debug("PropertiesChanged 广播失败")
 
     def _emit_layout_updated(self) -> None:
         """尽力广播 LayoutUpdated（已打开菜单的面板立即刷新；失败仅降级为下次拉取）。"""

@@ -83,6 +83,7 @@ class DictationEngine:
                 self._recorder.stop()
             except Exception:  # noqa: BLE001
                 logger.exception("取消录音时关麦异常")
+            self._set_result_locked({"ok": False, "error": "已取消"})
             self._set_state_locked(STATE_IDLE)
             logger.info("听写已取消")
 

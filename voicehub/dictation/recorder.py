@@ -63,6 +63,8 @@ class MicrophoneRecorder:
         blocksize = self._sample_rate * self._block_ms // 1000
         self._buffer = bytearray()
         self._auto_stop_fired = False
+        if self._vad is not None and hasattr(self._vad, "reset"):
+            self._vad.reset()  # 会话间状态残留会导致秒停（见 VadTracker.reset）
         try:
             self._stream = self._open_stream(blocksize, self._on_audio)
         except Exception as e:  # noqa: BLE001 - 声卡/驱动问题统一走引擎降级

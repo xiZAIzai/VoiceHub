@@ -58,6 +58,15 @@ class VadTracker:
     def elapsed_ms(self) -> int:
         return self._frames * self.frame_ms
 
+    def reset(self) -> None:
+        """新录音会话前重置（openKylin 实测事故：上一次的静音计数跨会话残留，
+        导致新会话开始零点几秒就被误判 silence 立即停止）。"""
+        self._frames = 0
+        self._consecutive_silence = 0
+        self._has_spoken = False
+        self._stopped = False
+        self._stop_reason = None
+
     # ---------- 判定 ----------
     def _check(self) -> Optional[str]:
         if self._frames >= self._max_frames:

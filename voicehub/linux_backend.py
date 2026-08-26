@@ -231,12 +231,33 @@ def _build_tray(components, stop: threading.Event):
 
 
 def _wire_dictation(components, tray) -> None:
-    """听写引擎状态 → 托盘菜单标签（开始/停止听写）跟随。"""
+    """听写引擎状态 → 托盘反馈（菜单标签 + 图标变色）+ 桌面通知横幅。
+
+    2026-08-26 用户实测反馈：触发后无任何可见效果（闪电说有波形悬浮框）。
+    M12 悬浮窗落地前，用「录音中图标变红 + 开始/结果横幅」保证每个环节可见。
+    """
     dictation = getattr(components, "dictation", None)
     if dictation is None:
         return
+    from .notify import DesktopNotifier
+
+    notifier = DesktopNotifier()
 
     def _on_state(state: str) -> None:
-        tray.set_dictation_state(state == "recording")
+        recording = state == "recording"
+        tray.set_dictation_state(recording)
+        if recording:
+            notifier.send("VoiceHub 正在听写", "说话吧；停顿约 1.5 秒自动结束，"
+                          "再按一次立即结束", timeout_ms=8000)
+        elif state == "idle":
+            result = dictation.last_result()
+            if not result:
+                return
+            if result.get("ok"):
+                text = result.get("text", "")
+                notifier.send(f"识别完成（{len(text)} 字）",
+                              text if len(text) <= 80 else text[:80] + "…")
+            else:
+                notifier.send("听写未成功", str(result.get("error", "未知原因")))
 
     dictation.set_on_state_change(_on_state)

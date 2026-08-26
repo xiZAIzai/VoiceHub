@@ -413,3 +413,25 @@ def test_client_missing_credentials_raises():
         VolcengineSaucClient()
     with pytest.raises(AsrError):
         VolcengineSaucClient(app_key="only-app-key")
+
+
+def test_engine_cancel_sets_cancelled_result():
+    engine = _engine(_FakeRecorder(), _FakeProvider(), [])
+    engine.toggle()
+    engine.cancel()
+    assert engine.last_result() == {"ok": False, "error": "已取消"}
+
+
+def test_vad_reset_clears_session_state():
+    """openKylin 实测事故回归：静音计数跨会话残留导致新会话秒停。"""
+    v = VadTracker(silence_ms=1000, threshold=0.01, lead_in_ms=10000,
+                   max_duration_ms=60000)
+    v.feed(0.05)
+    for _ in range(75):  # 1.5s 静音 → 触发 silence 停止
+        v.feed(0.0)
+    assert v.feed(0.0) == "silence"
+    v.reset()
+    assert v.has_spoken() is False and v.elapsed_ms() == 0
+    # 重置后新会话不会立即停止
+    for _ in range(100):
+        assert v.feed(0.0) is None

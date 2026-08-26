@@ -128,3 +128,37 @@ def test_api_config_put_invalid_returns_400(tmp_path):
     assert resp.status_code == 400
     assert resp.json()["ok"] is False
     assert "error" in resp.json()
+
+
+class _FakeDictation:
+    def __init__(self, state="idle"):
+        self._state = state
+        self.toggled = 0
+
+    def toggle(self):
+        self.toggled += 1
+        self._state = "recording" if self._state == "idle" else "idle"
+        return self._state
+
+    def state(self):
+        return self._state
+
+    def last_result(self):
+        return {"ok": True, "text": "测试文本"}
+
+
+def test_api_dictate_toggle_and_status():
+    d = _FakeDictation()
+    app = Dashboard(Config(), dictation=d).build_app()
+    client = TestClient(app)
+    resp = client.post("/api/dictate/toggle")
+    assert resp.json() == {"ok": True, "state": "recording"}
+    status = client.get("/api/dictate/status").json()
+    assert status["ok"] is True and status["state"] == "recording"
+    assert status["last_result"]["text"] == "测试文本"
+
+
+def test_api_dictate_toggle_without_engine():
+    app = Dashboard(Config()).build_app()
+    resp = TestClient(app).post("/api/dictate/toggle")
+    assert resp.json() == {"ok": False, "error": "builtin 听写引擎未启用"}

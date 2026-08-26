@@ -94,15 +94,16 @@ def build_components(config_path: str | Path = "config.json") -> Components:
     orchestrator = Orchestrator(config, sticky, monitor, router)
     # 设置页（M6-③）：config.json 唯一写入方，去抖/超时参数可热应用
     config_service = ConfigService(config_path, monitor=monitor, sticky=sticky)
+
+    # V4/M11：builtin 听写引擎（录音 → 云 ASR → orchestrator 直通路由）
+    dictation = build_dictation(config, orchestrator)
+
     dashboard = Dashboard(config, storage, sticky, discovery, hotkeys,
-                          settings=config_service)
+                          settings=config_service, dictation=dictation)
 
     # 注册目标热键：热键回调 → 编排层 select_target
     for key, target in config.targets.items():
         hotkeys.register(key, target.hotkey, lambda k=key: orchestrator.select_target(k))
-
-    # V4/M11：builtin 听写引擎（录音 → 云 ASR → orchestrator 直通路由）
-    dictation = build_dictation(config, orchestrator)
 
     return Components(
         config=config, storage=storage, discovery=discovery, sticky=sticky,
@@ -222,14 +223,41 @@ def _setup_logging() -> None:
         logging.basicConfig(level=logging.INFO, format=fmt)
 
 
+def run_dictate_cli(config_path: str | Path) -> int:
+    """--dictate：触发运行中实例的听写开关后退出。
+
+    Wayland 下 X11 全局热键不可靠（pynput 仅 XWayland 聚焦时收得到键），
+    这是给 UKUI 系统快捷键 / wlr 绑定工具用的稳态入口（ADR-9 触发第三通道）。
+    """
+    import httpx
+
+    config = Config.load(config_path)
+    url = f"http://{config.server_host}:{config.server_port}/api/dictate/toggle"
+    try:
+        r = httpx.post(url, timeout=5, trust_env=False)
+        data = r.json()
+    except Exception as e:  # noqa: BLE001 - CLI 场景错误直接打印
+        print(f"触发失败（实例未运行?）: {e}")
+        return 1
+    if data.get("ok"):
+        print(f"已触发听写: {data.get('state')}")
+        return 0
+    print(f"触发失败: {data.get('error')}")
+    return 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     _setup_logging()
     parser = argparse.ArgumentParser(description="VoiceHub 语音转写多设备分发")
     parser.add_argument("--config", default=None,
                         help="config.json 路径（默认：exe 目录 / 当前目录下 config.json）")
     parser.add_argument("--no-web", action="store_true", help="不启动仪表盘（仅 CLI）")
+    parser.add_argument("--dictate", action="store_true",
+                        help="触发运行中实例的听写开关后退出（供系统快捷键调用）")
     args = parser.parse_args(argv)
     config_path = args.config if args.config else default_config_path()
+    if args.dictate:
+        return run_dictate_cli(config_path)
 
     try:
         components = build_components(config_path)

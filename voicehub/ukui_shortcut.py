@@ -53,8 +53,11 @@ def to_gtk_accel(spec: str) -> str:
     return out
 
 
+DESKTOP_ID = "voicehub-dictate.desktop"
+
+
 def dictation_command() -> str:
-    """听写触发命令（注册进系统快捷键的 action）。"""
+    """听写触发命令（写入 desktop 文件 Exec 行）。"""
     import os
     import sys
 
@@ -66,13 +69,49 @@ def dictation_command() -> str:
     return f'"{sys.executable}" -m voicehub.main --dictate'
 
 
+def desktop_file_path() -> str:
+    """听写 desktop 文件路径（~/.local/share/applications/，GDesktopAppInfo 标准搜索路径）。"""
+    import os
+
+    return os.path.expanduser(f"~/.local/share/applications/{DESKTOP_ID}")
+
+
+def write_desktop_file() -> Optional[str]:
+    """生成/刷新听写 desktop 文件；返回路径，失败 None。
+
+    UKUI 自定义快捷键的 action 经 g_desktop_app_info_new_from_filename 解析
+    （2026-08-26 用户实测定位：控制中心 UI 是「选择程序」，裸命令串不被识别），
+    故必须落到 desktop 文件，Exec 里携带 --dictate 参数。
+    """
+    import os
+
+    path = desktop_file_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=VoiceHub 听写\n"
+            "Comment=开始/停止语音听写\n"
+            f"Exec={dictation_command()}\n"
+            "NoDisplay=true\n"
+        )
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+    except OSError as e:
+        logger.warning("desktop 文件写入失败: %s", e)
+        return None
+    return path
+
+
 def find_dictate_slot() -> Optional[dict]:
     """找到已注册的听写快捷键槽位；无则 None。返回 {slot, binding, action}。"""
     for n in range(MAX_SLOTS):
         action = _gsettings("get", _slot_path(n), "action")
         if action is None:
             continue
-        if "--dictate" in action:
+        # 兼容两种 action 形态：desktop 文件路径（新）/ 含 --dictate 的命令串（旧）
+        if DESKTOP_ID in action or "--dictate" in action:
             binding = (_gsettings("get", _slot_path(n), "binding") or "''").strip("'")
             return {"slot": n, "binding": binding, "action": action.strip("'")}
     return None
@@ -83,20 +122,41 @@ def register(binding: str = "Ctrl+Alt+V", name: str = "VoiceHub 听写") -> dict
     accel = to_gtk_accel(binding)
     if accel.count("<") < 1 or not accel.split(">")[-1]:
         return {"ok": False, "error": f"非法快捷键: {binding}（需修饰键+主键，如 Ctrl+Alt+V）"}
+    desktop = write_desktop_file()
+    if desktop is None:
+        return {"ok": False, "error": "desktop 文件写入失败（权限?）"}
     existing = find_dictate_slot()
     slot = existing["slot"] if existing else _free_slot()
     if slot is None:
         return {"ok": False, "error": "无可用自定义快捷键槽位"}
-    cmd = dictation_command()
     results = [
         _gsettings("set", _slot_path(slot), "name", f"'{name}'"),
-        _gsettings("set", _slot_path(slot), "action", f"'{cmd}'"),
+        _gsettings("set", _slot_path(slot), "action", f"'{desktop}'"),
         _gsettings("set", _slot_path(slot), "binding", f"'{accel}'"),
     ]
     if any(r is None for r in results):
         return {"ok": False, "error": "gsettings 写入失败（非 UKUI 桌面?）"}
-    logger.info("UKUI 系统快捷键已注册: %s -> %s (custom%s)", accel, cmd, slot)
-    return {"ok": True, "slot": slot, "binding": accel, "action": cmd}
+    _restart_ukui_daemon()  # custom 清单守护进程启动时枚举（2026-08-26 实测）
+    logger.info("UKUI 系统快捷键已注册: %s -> %s (custom%s)", accel, desktop, slot)
+    return {"ok": True, "slot": slot, "binding": accel, "action": desktop}
+
+
+def _restart_ukui_daemon() -> None:
+    """重启 ukui-settings-daemon 使新注册的 custom 快捷键被枚举。
+
+    守护进程被会话管理器自动拉起（2026-08-26 实测 ~4s 无感恢复），自定义快捷键
+    仅在启动时枚举（运行期 dconf watch 未覆盖 custom 路径新增场景）。
+    """
+    import subprocess
+
+    try:
+        p = subprocess.run(["pgrep", "-x", "ukui-settings-daemon"],
+                           capture_output=True, timeout=5, encoding="utf-8")
+        pids = [line for line in (p.stdout or "").split() if line]
+        for pid in pids:
+            subprocess.run(["kill", pid], capture_output=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("ukui-settings-daemon 重启跳过")
 
 
 def unregister() -> dict:

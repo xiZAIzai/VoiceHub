@@ -30,6 +30,7 @@ class Router:
         storage: Optional[Storage] = None,
         now: Callable[[], float] = time.time,
         clipboard_write: Optional[Callable[[str], bool]] = None,
+        paste_at_cursor: Optional[Callable[[], bool]] = None,
     ) -> None:
         self._config = config
         self._discovery = discovery
@@ -37,6 +38,7 @@ class Router:
         self._storage = storage
         self._now = now
         self._clipboard_write = clipboard_write
+        self._paste_at_cursor = paste_at_cursor
 
     def target_by_key(self, key: str) -> Optional[TargetConfig]:
         return self._config.targets.get(key)
@@ -71,12 +73,18 @@ class Router:
             if not deliver_local:
                 # ADR-5：闪电说链路，桌面端由闪电说完成粘贴，VoiceHub 只记录。
                 return True, None
-            # ADR-9：builtin 直通链路，写系统剪贴板完成本地投递（Wayland 注入留 M12+）
+            # ADR-9：builtin 直通链路：写剪贴板 + （可选）在光标处模拟 Ctrl+V
             if self._clipboard_write is None:
                 return False, "no clipboard writer"
-            if self._clipboard_write(text):
-                return True, None
-            return False, "clipboard write failed"
+            if not self._clipboard_write(text):
+                return False, "clipboard write failed"
+            pasted = False
+            if self._config.transcription.auto_paste and self._paste_at_cursor is not None:
+                try:
+                    pasted = bool(self._paste_at_cursor())
+                except Exception:  # noqa: BLE001 - 粘贴失败不影响落库（剪贴板兜底）
+                    logger.warning("光标处自动粘贴失败", exc_info=True)
+            return True, None if pasted else "clipboard only (paste unavailable)"
         if target.type != "network_http":
             return False, f"unsupported type: {target.type}"
         endpoint = self._resolve_endpoint(target)

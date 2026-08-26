@@ -65,10 +65,10 @@ def build_components(config_path: str | Path = "config.json") -> Components:
     )
     sticky = StickyTarget(pending_timeout_sec=config.pending_timeout_sec)
     # transport 必须注入：Router 不带 transport 时所有远程路由都会以 "no transport" 失败；
-    # clipboard_write 供 builtin 直通链路本地投递（V4/ADR-9）
+    # clipboard_write 供 builtin 直通链路本地投递（V4/ADR-9）；paste_at_cursor 贴到光标
     clipboard_write = _clipboard_writer()
     router = Router(config, discovery=discovery, transport=HttpPusher(), storage=storage,
-                    clipboard_write=clipboard_write)
+                    clipboard_write=clipboard_write, paste_at_cursor=_cursor_paster())
     hotkeys = HotkeyRegistry()
 
     # 剪贴板监控：Windows 读 win32 剪贴板，Linux 读 xclip（V3/M8），
@@ -122,6 +122,15 @@ def _clipboard_writer():
         from .linux_backend import xclip_write_text
 
         return xclip_write_text
+    return None
+
+
+def _cursor_paster():
+    """光标处粘贴器（听写文本自动上屏）；无实现平台返回 None（仅剪贴板模式）。"""
+    if sys.platform.startswith("linux"):
+        from .linux_backend import xdotool_paste
+
+        return xdotool_paste
     return None
 
 

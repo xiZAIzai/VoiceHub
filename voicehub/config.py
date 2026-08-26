@@ -75,6 +75,9 @@ class TranscriptionConfig:
     trigger_key: str = "ctrl+alt+v"
     # 无粘滞目标时直通路由的默认目标；空 = 第一个 local 目标
     default_target: str = ""
+    # 识别后除写剪贴板外，在光标处自动模拟 Ctrl+V（xdotool；Wayland 原生窗口可能不生效，
+    # 失败自动退回仅剪贴板模式）
+    auto_paste: bool = True
     # 录音参数
     sample_rate: int = 16000
     # VAD：静音自动停（说过话后连续静音判定结束）；lead_in 为从未说话的最长等待
@@ -103,6 +106,7 @@ class TranscriptionConfig:
         cfg.language = str(data.get("language", cfg.language))
         cfg.trigger_key = str(data.get("trigger_key", cfg.trigger_key))
         cfg.default_target = str(data.get("default_target", cfg.default_target))
+        cfg.auto_paste = _get("auto_paste", bool, cfg.auto_paste)
         cfg.sample_rate = _get("sample_rate", int, cfg.sample_rate)
         cfg.vad_silence_ms = _get("vad_silence_ms", int, cfg.vad_silence_ms)
         cfg.vad_threshold = _get("vad_threshold", float, cfg.vad_threshold)

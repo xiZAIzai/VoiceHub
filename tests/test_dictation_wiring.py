@@ -298,3 +298,50 @@ def test_tray_dictation_state_swaps_pixmap():
     tray.set_dictation_state(False)
     assert tray._pixmap == tray._pixmap_normal  # noqa: SLF001
     assert tray._title == "VoiceHub"  # noqa: SLF001
+
+
+# ---------- UKUI 快捷键格式转换（纯函数） ----------
+
+def test_to_gtk_accel_variants():
+    from voicehub.ukui_shortcut import to_gtk_accel
+
+    assert to_gtk_accel("Ctrl+Alt+V") == "<Ctrl><Alt>v"
+    assert to_gtk_accel("ctrl+alt+v") == "<Ctrl><Alt>v"
+    assert to_gtk_accel("Super+F9") == "<Super>f9"
+    assert to_gtk_accel("Shift+F1") == "<Shift>f1"
+    assert to_gtk_accel("Control+X") == "<Ctrl>x"
+    assert to_gtk_accel("Meta+K") == "<Super>k"
+
+
+# ---------- 自动粘贴（光标处 Ctrl+V） ----------
+
+def test_deliver_local_auto_paste_at_cursor():
+    pasted = []
+
+    def _paste():
+        pasted.append(1)
+        return True
+
+    r = _router(clipboard_write=lambda t: True)
+    r._paste_at_cursor = _paste  # noqa: SLF001 - 测试注入
+    result = r.route("文本", "desktop", deliver_local=True)
+    assert result["ok"] is True and pasted == [1]
+
+
+def test_deliver_local_auto_paste_config_off():
+    pasted = []
+
+    r = _router(clipboard_write=lambda t: True)
+    r._config.transcription.auto_paste = False  # noqa: SLF001
+    r._paste_at_cursor = lambda: pasted.append(1) or True  # noqa: SLF001
+    result = r.route("文本", "desktop", deliver_local=True)
+    assert result["ok"] is True and pasted == []  # 配置关闭不粘贴
+
+
+def test_deliver_local_paste_failure_still_ok():
+    """粘贴失败（Wayland 原生窗口）退回仅剪贴板，路由仍算成功。"""
+    r = _router(clipboard_write=lambda t: True)
+    r._paste_at_cursor = lambda: False  # noqa: SLF001
+    result = r.route("文本", "desktop", deliver_local=True)
+    assert result["ok"] is True
+    assert result["error"] == "clipboard only (paste unavailable)"

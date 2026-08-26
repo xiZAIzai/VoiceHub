@@ -131,6 +131,41 @@ class Dashboard:
             return {"ok": True, "state": self._dictation.state(),
                     "last_result": result}
 
+        @app.get("/api/dictate/shortcut")
+        def api_shortcut_get():
+            """查询 UKUI 系统快捷键注册状态（非 Linux/UKUI 返回 supported=false）。"""
+            import sys
+
+            if not sys.platform.startswith("linux"):
+                return {"supported": False}
+            from .ukui_shortcut import find_dictate_slot
+
+            found = find_dictate_slot()
+            return {"supported": True, "registered": found is not None,
+                    **(found or {})}
+
+        @app.post("/api/dictate/shortcut")
+        async def api_shortcut_register(req: Request):
+            """一键注册听写系统快捷键（写 UKUI gsettings，即时生效）。"""
+            import sys
+
+            if not sys.platform.startswith("linux"):
+                return {"ok": False, "error": "仅 Linux/UKUI 支持"}
+            from .ukui_shortcut import register as reg
+
+            body = await req.json()
+            return reg(binding=str(body.get("binding", "Ctrl+Alt+V")))
+
+        @app.delete("/api/dictate/shortcut")
+        def api_shortcut_unregister():
+            import sys
+
+            if not sys.platform.startswith("linux"):
+                return {"ok": False, "error": "仅 Linux/UKUI 支持"}
+            from .ukui_shortcut import unregister as unreg
+
+            return unreg()
+
         @app.put("/api/config")
         async def api_config_put(req: Request):
             """设置页保存：校验 + 原子写回 + 热应用；非法配置返回 400。"""
@@ -205,6 +240,27 @@ _INDEX_HTML = """<!doctype html>
           </label>
         </div>
       </div>
+      <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->
+      <div class="bg-slate-800 rounded-lg p-4" v-if="shortcut.supported">
+        <h2 class="text-sm text-slate-400 mb-3">听写快捷键（系统级，注册后任何界面下都生效）</h2>
+        <div class="flex items-center gap-3 flex-wrap">
+          <input v-model="shortcut.binding" placeholder="如 Ctrl+Alt+V"
+                 class="bg-slate-700 rounded px-3 py-1.5 text-sm font-mono w-44">
+          <button @click="registerShortcut" :disabled="shortcut.busy"
+                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+            {{ shortcut.registered ? '更新注册' : '一键注册' }}
+          </button>
+          <button v-if="shortcut.registered" @click="removeShortcut"
+                  class="bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded text-sm">移除</button>
+          <span class="text-sm" :class="shortcut.msgOk ? 'text-emerald-400' : 'text-red-400'">
+            {{ shortcut.msg }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">
+          注册即写入系统快捷键（等效于控制中心「自定义快捷键」），按一下开始听写、再按一下结束；
+          录音中屏幕底部有波形悬浮框，识别结果自动粘贴到光标处。
+        </p>
+      </div>
       <div class="flex items-center gap-3">
         <button @click="saveConfig" :disabled="saving"
                 class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
@@ -274,6 +330,9 @@ createApp({
     logs: [],
     // 设置页（M6-③）：cfg 为 /api/config 原始结构，编辑后整份 PUT 回传
     showSettings: false, cfg: null, saving: false, saveMsg: null,
+    // V4/M11：UKUI 听写系统快捷键一键注册
+    shortcut: { supported: false, registered: false, binding: 'Ctrl+Alt+V',
+                msg: '', msgOk: true, busy: false },
   }; },
   computed: {
     stickyTargetName() {
@@ -292,6 +351,56 @@ createApp({
       if (this.showSettings && !this.cfg) {
         const r = await fetch('/api/config');
         this.cfg = await r.json();
+      }
+      if (this.showSettings) this.refreshShortcut();
+    },
+    async refreshShortcut() {
+      try {
+        const r = await fetch('/api/dictate/shortcut');
+        const d = await r.json();
+        this.shortcut.supported = !!d.supported;
+        this.shortcut.registered = !!d.registered;
+        if (d.registered && d.binding) {
+          // GTK 加速器显示化：<Ctrl><Alt>v → Ctrl+Alt+V
+          const parts = d.binding.split('>').filter(Boolean).map(s => s.replace('<', ''));
+          const last = parts.pop() || '';
+          this.shortcut.binding = parts.join('+') + '+' +
+              (last.length === 1 ? last.toUpperCase() : last);
+        }
+        if (d.registered) this.shortcut.msg = '已注册：' + d.binding;
+      } catch (e) { this.shortcut.supported = false; }
+    },
+    async registerShortcut() {
+      this.shortcut.busy = true;
+      try {
+        const r = await fetch('/api/dictate/shortcut', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ binding: this.shortcut.binding }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.shortcut.registered = true;
+          this.shortcut.msg = '已注册：' + d.binding + '（立即生效，试试吧）';
+          this.shortcut.msgOk = true;
+        } else {
+          this.shortcut.msg = '注册失败：' + (d.error || '未知错误');
+          this.shortcut.msgOk = false;
+        }
+      } catch (e) {
+        this.shortcut.msg = '注册失败：' + e;
+        this.shortcut.msgOk = false;
+      } finally {
+        this.shortcut.busy = false;
+      }
+    },
+    async removeShortcut() {
+      this.shortcut.busy = true;
+      try {
+        await fetch('/api/dictate/shortcut', { method: 'DELETE' });
+        this.shortcut.registered = false;
+        this.shortcut.msg = '已移除';
+      } finally {
+        this.shortcut.busy = false;
       }
     },
     async saveConfig() {

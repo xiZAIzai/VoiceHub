@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+import time
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,24 @@ def xclip_write_text(text: str) -> bool:
         )
     except (OSError, subprocess.TimeoutExpired):
         logger.warning("xclip 写入失败（未安装/无 X 会话）")
+        return False
+    return p.returncode == 0
+
+
+def xdotool_paste() -> bool:
+    """在当前光标处模拟 Ctrl+V（V4 听写「贴到光标处」，对齐闪电说体验）。
+
+    仅对 XWayland 窗口生效（Wayland 原生窗口收不到合成键），失败由 Router
+    降级为「仅剪贴板」并标注；剪贴板写入后需短暂等待 X 选区交接。
+    """
+    time.sleep(0.15)  # xclip 守护进程接管选区需要一拍
+    try:
+        p = subprocess.run(
+            ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
+            capture_output=True, timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("xdotool 不可用，跳过光标粘贴")
         return False
     return p.returncode == 0
 
@@ -151,6 +170,7 @@ class PynputHotkeyBackend:
 
     register_all 返回 False 表示降级（无 DISPLAY / 无 pynput），
     调用方照常运行其余功能（托盘菜单仍可触发听写）。
+    系统快捷键（--dictate 通道）已注册时停用 pynput 听写键，防止双触发。
     """
 
     def __init__(self) -> None:
@@ -165,13 +185,17 @@ class PynputHotkeyBackend:
         mapping = build_hotkey_map(components.config.trigger_key, components.config.targets)
         hotkeys = {combo: (lambda k=key: components.orchestrator.select_target(k))
                    for combo, key in mapping}
-        # V4/M11：builtin 听写独立触发键（ADR-9：与闪电说 Alt 解耦，避免撞车）
+        # V4/M11：builtin 听写独立触发键（ADR-9：与闪电说 Alt 解耦，避免撞车）；
+        # UKUI 系统快捷键已注册时跳过（同一按键会双触发：CLI + X11 抓键各一次）
         dictation = getattr(components, "dictation", None)
         if dictation is not None:
-            combo = to_pynput_combo(components.config.transcription.trigger_key)
-            if combo:
-                hotkeys[combo] = dictation.toggle
-                logger.info("已注册听写热键: %s", combo)
+            if _system_shortcut_registered():
+                logger.info("检测到 UKUI 系统快捷键已注册，pynput 听写热键停用")
+            else:
+                combo = to_pynput_combo(components.config.transcription.trigger_key)
+                if combo:
+                    hotkeys[combo] = dictation.toggle
+                    logger.info("已注册听写热键: %s", combo)
         self._listener = keyboard.GlobalHotKeys(hotkeys)
         self._listener.start()  # listener 自带监听线程
         logger.info("已注册 Linux 热键: %s", [c for c, _ in mapping])
@@ -230,34 +254,51 @@ def _build_tray(components, stop: threading.Event):
     )
 
 
-def _wire_dictation(components, tray) -> None:
-    """听写引擎状态 → 托盘反馈（菜单标签 + 图标变色）+ 桌面通知横幅。
+def _system_shortcut_registered() -> bool:
+    """UKUI 系统快捷键（--dictate 通道）是否已由本产品注册。失败按未注册处理。"""
+    try:
+        from .ukui_shortcut import find_dictate_slot
 
-    2026-08-26 用户实测反馈：触发后无任何可见效果（闪电说有波形悬浮框）。
-    M12 悬浮窗落地前，用「录音中图标变红 + 开始/结果横幅」保证每个环节可见。
+        return find_dictate_slot() is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _wire_dictation(components, tray) -> None:
+    """听写引擎状态 → 可见反馈全家桶（对齐闪电说体感，2026-08-26 用户反馈）：
+
+    - 波形悬浮框（录音中屏幕底部跳动，再触发一次消失）
+    - 托盘：菜单标签 开/停 + 图标变红 + Title 标注
+    - 桌面通知：识别结果 / 失败原因（开始提示由悬浮框承担，不再重复弹）
     """
     dictation = getattr(components, "dictation", None)
     if dictation is None:
         return
+    from .dictation.overlay import WaveformOverlay
     from .notify import DesktopNotifier
 
     notifier = DesktopNotifier()
+    overlay = WaveformOverlay()
+    recorder = getattr(dictation, "recorder", None)
+    if recorder is not None and hasattr(recorder, "set_level_callback"):
+        recorder.set_level_callback(overlay.update_level)
 
     def _on_state(state: str) -> None:
         recording = state == "recording"
         tray.set_dictation_state(recording)
         if recording:
-            notifier.send("VoiceHub 正在听写", "说话吧；停顿约 1.5 秒自动结束，"
-                          "再按一次立即结束", timeout_ms=8000)
-        elif state == "idle":
-            result = dictation.last_result()
-            if not result:
-                return
-            if result.get("ok"):
-                text = result.get("text", "")
-                notifier.send(f"识别完成（{len(text)} 字）",
-                              text if len(text) <= 80 else text[:80] + "…")
-            else:
-                notifier.send("听写未成功", str(result.get("error", "未知原因")))
+            overlay.show()
+        else:
+            overlay.hide()
+            if state == "idle":
+                result = dictation.last_result()
+                if not result:
+                    return
+                if result.get("ok"):
+                    text = result.get("text", "")
+                    notifier.send(f"识别完成（{len(text)} 字）",
+                                  text if len(text) <= 80 else text[:80] + "…")
+                else:
+                    notifier.send("听写未成功", str(result.get("error", "未知原因")))
 
     dictation.set_on_state_change(_on_state)

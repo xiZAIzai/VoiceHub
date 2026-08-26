@@ -52,10 +52,15 @@ class MicrophoneRecorder:
         self._stream = None
         self._lock = threading.Lock()
         self._auto_stop_fired = False
+        self._on_level: Optional[Callable[[float], None]] = None
 
     def set_auto_stop_callback(self, cb: Callable[[str], None]) -> None:
         """后挂自动停止回调（引擎在构造 recorder 之后才存在，避免循环依赖）。"""
         self._on_auto_stop = cb
+
+    def set_level_callback(self, cb: Callable[[float], None]) -> None:
+        """后挂电平回调（悬浮框波形用；音频线程调用，接收方须自带线程安全）。"""
+        self._on_level = cb
 
     # ---------- 生命周期 ----------
     def start(self) -> None:
@@ -99,9 +104,15 @@ class MicrophoneRecorder:
         pcm = bytes(indata)
         with self._lock:
             self._buffer.extend(pcm)
+        rms = pcm_rms(pcm)
+        if self._on_level is not None:
+            try:
+                self._on_level(rms)
+            except Exception:  # noqa: BLE001 - 悬浮框回调异常不能杀音频线程
+                logger.exception("on_level 回调异常")
         if self._vad is None or self._auto_stop_fired:
             return
-        reason = self._vad.feed(pcm_rms(pcm))
+        reason = self._vad.feed(rms)
         if reason is not None:
             self._auto_stop_fired = True
             if self._on_auto_stop is not None:

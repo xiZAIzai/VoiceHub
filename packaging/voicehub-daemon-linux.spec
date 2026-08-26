@@ -41,12 +41,15 @@ a = Analysis(
         "pynput.mouse._dummy",
         # V4/M11 听写内核：sounddevice/websocket 均为函数内延迟导入，
         # 静态分析不可见（同 pynput 教训，显式写死）；sounddevice 缺 PortAudio
-        # 系统库时运行期自动回退 arecord，模块本身仍需收编
+        # 系统库时运行期自动回退 arecord，模块本身仍收编
         *collect_submodules("sounddevice"),
         "websocket",
         *collect_submodules("websocket"),
+        # V4/M11 波形悬浮框（tkinter，overlay.py 延迟导入；PyInstaller 自动带 tcl/tk）
+        "tkinter",
+        "tkinter.font",
+        "_tkinter",
     ],
-    excludes=["tkinter"],
     noarchive=False,
 )
 

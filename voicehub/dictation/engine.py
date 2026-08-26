@@ -51,6 +51,11 @@ class DictationEngine:
         self._last_result: Optional[dict] = None
 
     # ---------- 查询 ----------
+    @property
+    def recorder(self):
+        """录音器引用（平台后端挂电平回调用，如波形悬浮框）。"""
+        return self._recorder
+
     def state(self) -> str:
         with self._lock:
             return self._state

@@ -37,10 +37,12 @@ class DictationEngine:
         route: Callable[[str, dict], dict],
         on_state_change: Optional[Callable[[str], None]] = None,
         max_duration_sec: float = 60.0,
+        polisher=None,
     ) -> None:
         self._recorder = recorder
         self._provider = provider
         self._route = route
+        self._polisher = polisher
         self._on_state_change = on_state_change
         self._max_duration_sec = max_duration_sec
         # RLock：_set_state_locked 持锁触发 UI 回调，回调可能回读 state()
@@ -188,10 +190,26 @@ class DictationEngine:
                     self._set_result_locked({"ok": False, "error": "识别结果为空"})
                     self._set_state_locked(STATE_IDLE)
             return
-        result = self._route(text, {"record_ms": elapsed_rec})
+        # M12-① 润色：路由前 LLM 后处理；失败/空结果降级原文（铁律：不挡上屏）
+        raw_text = text
+        polish_state = "off"
+        if self._polisher is not None and self._polisher.enabled():
+            try:
+                polished = self._polisher.polish(text).strip()
+                if polished:
+                    text, polish_state = polished, self._polisher.mode
+                else:
+                    polish_state = "failed"
+            except Exception as e:  # noqa: BLE001 - 润色失败必须可见且不阻断
+                logger.warning("润色失败，使用 ASR 原文: %s", e)
+                polish_state = "failed"
+        result = self._route(text, {"record_ms": elapsed_rec,
+                                    "raw_text": raw_text, "polish": polish_state})
         with self._lock:
             if self._gen == gen:
+                extra = {"raw_text": raw_text} if raw_text != text else {}
                 self._set_result_locked({"ok": bool(result.get("ok")), "text": text,
+                                         **extra,
                                          **{k: v for k, v in result.items()
                                             if k in ("target", "error", "log_id")}})
                 self._set_state_locked(STATE_IDLE)

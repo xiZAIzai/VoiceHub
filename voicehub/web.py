@@ -240,6 +240,39 @@ _INDEX_HTML = """<!doctype html>
           </label>
         </div>
       </div>
+      <!-- V4/M12-①：转写润色（LLM 后处理，四模式） -->
+      <div class="bg-slate-800 rounded-lg p-4" v-if="cfg.polish">
+        <h2 class="text-sm text-slate-400 mb-3">转写润色（保存后重启程序生效）</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="text-sm">模式
+            <select v-model="cfg.polish.mode"
+                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+              <option value="off">关闭（原文直出，零延迟）</option>
+              <option value="light">轻整理（短句输入，输出自然句子）</option>
+              <option value="structured">结构化整理（长口述，喂下游大模型）</option>
+              <option value="custom">自定义 prompt</option>
+            </select>
+          </label>
+          <label class="text-sm">模型
+            <input v-model="cfg.polish.model"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+          </label>
+          <label class="text-sm">接口地址 base_url
+            <input v-model="cfg.polish.base_url"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+          </label>
+        </div>
+        <label v-if="cfg.polish.mode === 'custom'" class="text-sm block mt-3">
+          自定义 prompt
+          <textarea v-model="cfg.polish.custom_prompt" rows="5"
+                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1 text-xs font-mono"></textarea>
+        </label>
+        <p class="text-xs text-slate-500 mt-2">
+          润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
+          API Key 不在此配置（走 config.local.json 或环境变量 VOICEHUB_POLISH_API_KEY）。
+          原文与润色结果双双落库，仪表盘最近转写中可见对照。
+        </p>
+      </div>
       <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->
       <div class="bg-slate-800 rounded-lg p-4" v-if="shortcut.supported">
         <h2 class="text-sm text-slate-400 mb-3">听写快捷键（系统级，注册后任何界面下都生效）</h2>
@@ -315,6 +348,8 @@ _INDEX_HTML = """<!doctype html>
     <ul>
       <li v-for="log in logs" :key="log.id" class="border-t border-slate-700 py-2">
         <div class="text-sm">{{ log.processed_text }}</div>
+        <div v-if="log.raw_text && log.raw_text !== log.processed_text"
+             class="text-xs text-slate-600 mt-0.5">原文：{{ log.raw_text }}</div>
         <div class="text-xs text-slate-500">→ {{ log.target_device }} · {{ log.created_at }}</div>
       </li>
       <li v-if="!logs.length" class="text-slate-500">暂无记录</li>
@@ -351,6 +386,13 @@ createApp({
       if (this.showSettings && !this.cfg) {
         const r = await fetch('/api/config');
         this.cfg = await r.json();
+        if (this.cfg && !this.cfg.polish) this.cfg.polish = {};
+        if (this.cfg && this.cfg.polish) {
+          if (!this.cfg.polish.mode) this.cfg.polish.mode = 'off';
+          if (!this.cfg.polish.model) this.cfg.polish.model = 'deepseek-v4-flash';
+          if (!this.cfg.polish.base_url) this.cfg.polish.base_url = 'https://api.deepseek.com/v1';
+          if (this.cfg.polish.custom_prompt === undefined) this.cfg.polish.custom_prompt = '';
+        }
         if (this.cfg && !this.cfg.transcription) this.cfg.transcription = {};
         if (this.cfg && this.cfg.transcription) {
           if (this.cfg.transcription.vad_silence_ms === undefined) this.cfg.transcription.vad_silence_ms = 0;

@@ -117,6 +117,43 @@ class TranscriptionConfig:
         return cfg
 
 
+@dataclass
+class PolishConfig:
+    """V4/M12-① 转写润色配置（LLM 后处理，OpenAI 兼容 chat/completions）。
+
+    mode: off（默认，原文直出）| light（轻整理）| structured（结构化整理，
+    用户提供的 prompt 原文）| custom（custom_prompt）。
+    凭证与仓库种子分离同 ASR：api_key 走 config.local.json / 环境变量。
+    """
+
+    mode: str = "off"
+    provider: str = "deepseek"
+    base_url: str = "https://api.deepseek.com/v1"
+    model: str = "deepseek-v4-flash"
+    api_key: str = ""
+    custom_prompt: str = ""
+    timeout_sec: float = 20.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PolishConfig":
+        def _get(key: str, cast, default):
+            v = data.get(key, default)
+            try:
+                return cast(v)
+            except (TypeError, ValueError):
+                return default
+
+        cfg = cls()
+        cfg.mode = str(data.get("mode", cfg.mode))
+        cfg.provider = str(data.get("provider", cfg.provider))
+        cfg.base_url = str(data.get("base_url", cfg.base_url))
+        cfg.model = str(data.get("model", cfg.model))
+        cfg.api_key = str(data.get("api_key", cfg.api_key))
+        cfg.custom_prompt = str(data.get("custom_prompt", cfg.custom_prompt))
+        cfg.timeout_sec = _get("timeout_sec", float, cfg.timeout_sec)
+        return cfg
+
+
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """递归合并：override 覆盖 base，dict 深合并、其余类型整体替换。"""
     out = dict(base)
@@ -150,8 +187,9 @@ class Config:
     db_path: str = "voice_memory.db"
     retention_days: int = 90
     targets: dict[str, TargetConfig] = field(default_factory=dict)
-    # V4/ADR-9 自建转写内核
+    # V4/ADR-9 自建转写内核；V4/M12-① 润色
     transcription: TranscriptionConfig = field(default_factory=TranscriptionConfig)
+    polish: PolishConfig = field(default_factory=PolishConfig)
 
     @classmethod
     def load(cls, path: str | Path = "config.json") -> "Config":
@@ -180,6 +218,9 @@ class Config:
             env_legacy["access_key"] = os.environ["VOICEHUB_ASR_ACCESS_KEY"]
         if env_legacy:
             raw = deep_merge(raw, {"transcription": env_legacy})
+        env_polish_key = os.environ.get("VOICEHUB_POLISH_API_KEY")
+        if env_polish_key:
+            raw = deep_merge(raw, {"polish": {"api_key": env_polish_key}})
         cfg._apply(raw)
         return cfg
 
@@ -205,6 +246,9 @@ class Config:
         tc = raw.get("transcription")
         if isinstance(tc, dict) and tc:
             self.transcription = TranscriptionConfig.from_dict(tc)
+        pc = raw.get("polish")
+        if isinstance(pc, dict) and pc:
+            self.polish = PolishConfig.from_dict(pc)
 
     def target_by_hotkey(self, hotkey: str) -> TargetConfig | None:
         """按热键数字查目标，如 '2' -> laptop。"""

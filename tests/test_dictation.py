@@ -306,8 +306,10 @@ def test_engine_toggle_cycle_routes_text():
     assert engine.toggle() == STATE_PROCESSING
     _wait_idle(engine)
 
-    assert routed == [("你好世界", {"record_ms": routed[0][1]["record_ms"]})]
-    assert routed[0][0] == "你好世界" and routed[0][1]  # metadata 传递
+    text, meta = routed[0]
+    assert text == "你好世界"
+    assert set(meta) == {"record_ms", "raw_text", "polish"}  # M12-① 起固定三键
+    assert meta["raw_text"] == "你好世界" and meta["polish"] == "off"  # 未开润色
     assert prov.calls == [rec.pcm]
     result = engine.last_result()
     assert result["ok"] is True and result["text"] == "你好世界"

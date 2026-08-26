@@ -172,8 +172,19 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
         def _route(text: str, metadata: dict) -> dict:
             return orchestrator.route_direct(text, metadata=metadata)
 
+        pc = config.polish
+        polisher = None
+        if pc.mode != "off" and pc.api_key:
+            from .dictation.polisher import Polisher
+
+            polisher = Polisher(
+                mode=pc.mode, base_url=pc.base_url, api_key=pc.api_key,
+                model=pc.model, custom_prompt=pc.custom_prompt,
+                timeout_sec=pc.timeout_sec)
+            logger.info("润色已启用（模式=%s，模型=%s）", pc.mode, pc.model)
         engine = DictationEngine(
-            recorder, provider, _route, max_duration_sec=tc.max_duration_sec)
+            recorder, provider, _route, max_duration_sec=tc.max_duration_sec,
+            polisher=polisher)
         recorder.set_auto_stop_callback(engine.request_stop)
         logger.info("builtin 听写引擎已启用（%s，资源 %s）",
                     tc.base_url.rsplit("/", 1)[-1], tc.resource_id)

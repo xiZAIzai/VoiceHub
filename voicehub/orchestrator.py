@@ -84,11 +84,14 @@ class Orchestrator:
         target_key = self._sticky.consume()
         if target_key is None:
             target_key = self._default_direct_target()
-        meta = {"source": "builtin", **(metadata or {})}
+        meta = dict(metadata or {})
+        raw_text = meta.pop("raw_text", None)  # 原文走 DB 专用列，不进扩展元数据
+        meta = {"source": "builtin", **meta}
         if target_key is None:
             logger.warning("直通路由无可用目标（未配置 targets）")
             return {"ok": False, "error": "no target", "target": None}
-        return self._router.route(text, target_key, metadata=meta, deliver_local=True)
+        return self._router.route(text, target_key, raw_text=raw_text,
+                                  metadata=meta, deliver_local=True)
 
     def _default_direct_target(self) -> Optional[str]:
         tc = self._config.transcription

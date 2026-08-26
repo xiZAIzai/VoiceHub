@@ -26,5 +26,12 @@
     "laptop": { "name": "便携笔记本", "hotkey": "2", "type": "network_http" },
     "tablet": { "name": "Root 安卓平板", "hotkey": "3", "type": "network_http" }
   },
+  "polish": {
+    "mode": "off",
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-v4-flash",
+    "timeout_sec": 20
+  },
   "storage": { "db_path": "voice_memory.db", "retention_days": 90 }
 }

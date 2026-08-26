@@ -80,11 +80,13 @@ class TranscriptionConfig:
     auto_paste: bool = True
     # 录音参数
     sample_rate: int = 16000
-    # VAD：静音自动停（说过话后连续静音判定结束）；lead_in 为从未说话的最长等待
-    vad_silence_ms: int = 1500
+    # VAD：静音自动停（说过话后连续静音判定结束，0=关闭，默认关——用户偏好
+    # 手动截断，2026-08-26）；lead_in 为从未说话的最长等待；max 为单段硬上限
+    # （默认 300s 对齐闪电说 5min 段习惯，均可仪表盘设置页调整，重启生效）
+    vad_silence_ms: int = 0
     vad_threshold: float = 0.012
     vad_lead_in_ms: int = 10000
-    max_duration_sec: float = 60.0
+    max_duration_sec: float = 300.0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TranscriptionConfig":

@@ -351,6 +351,12 @@ createApp({
       if (this.showSettings && !this.cfg) {
         const r = await fetch('/api/config');
         this.cfg = await r.json();
+        if (this.cfg && !this.cfg.transcription) this.cfg.transcription = {};
+        if (this.cfg && this.cfg.transcription) {
+          if (this.cfg.transcription.vad_silence_ms === undefined) this.cfg.transcription.vad_silence_ms = 0;
+          if (this.cfg.transcription.max_duration_sec === undefined) this.cfg.transcription.max_duration_sec = 300;
+          if (this.cfg.transcription.vad_lead_in_ms === undefined) this.cfg.transcription.vad_lead_in_ms = 10000;
+        }
       }
       if (this.showSettings) this.refreshShortcut();
     },

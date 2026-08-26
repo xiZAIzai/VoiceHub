@@ -27,6 +27,16 @@ DEFAULT_URL = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
 DEFAULT_RESOURCE_ID = "volc.seedasr.sauc.duration"  # 豆包流式语音识别 2.0（小时版）
 SAMPLE_RATE = 16000
 
+# websocket-client 超时异常（发送阶段排空用，短超时属正常轮空）
+try:  # websocket 延迟导入，模块加载期探测一次
+    from websocket import WebSocketTimeoutException
+
+    _TIMEOUT_ERRORS = (WebSocketTimeoutException,)
+except ImportError:  # 无依赖环境（单测注入假连接）退化为通用超时
+    import socket as _socket
+
+    _TIMEOUT_ERRORS = (_socket.timeout,)
+
 
 class AsrError(RuntimeError):
     """ASR 调用失败（含服务端错误码）。"""
@@ -146,8 +156,7 @@ class VolcengineSaucClient:
         ws = self._connect(self._url, self._headers())
         try:
             ws.send_binary(encode_full_request(build_request_payload(self._language)))
-            self._send_audio(ws, pcm)
-            return self._read_final(ws)
+            return self._send_and_read(ws, pcm)
         finally:
             try:
                 ws.close()
@@ -164,40 +173,58 @@ class VolcengineSaucClient:
             headers["X-Api-Key"] = self._api_key
         return headers
 
-    def _send_audio(self, ws, pcm: bytes) -> None:
+    def _send_and_read(self, ws, pcm: bytes) -> str:
+        """边发边读：长音频时服务端逐块回帧，只发不读会塞满 socket 缓冲导致
+        死锁（2026-08-26 用户实测：长语音无结果且无报错的根因）；同时取消
+        响应帧数上限，长度约束交给 recv 超时。"""
+        buf = bytearray()
+        texts: list[str] = []
+
+        def _drain() -> str | None:
+            """读掉当前已到达的响应帧；返回最终文本、None（暂无更多数据）；
+            错误直接抛 AsrError。"""
+            while True:
+                try:
+                    msg = ws.recv()
+                except _TIMEOUT_ERRORS:
+                    return None  # 短超时内无新数据（发送阶段正常）
+                if not msg:
+                    raise AsrError("连接在响应途中关闭")
+                buf.extend(msg)
+                while True:
+                    frame = _try_parse(buf)
+                    if frame is None:
+                        break
+                    kind, a, payload = frame
+                    if kind == "error":
+                        raise AsrError(f"ASR 服务端错误 [{a}]: {json.loads(payload)}", code=a)
+                    text = ((json.loads(payload) or {}).get("result") or {}).get("text", "")
+                    if text:
+                        texts.append(text)
+                    if a & 0b0010:  # 最后一包：nostream 分段累计式，最终帧即全文
+                        return texts[-1] if texts else ""
+
+        ws.settimeout(0.05)  # 发送阶段：每块后短暂排空响应
         for i in range(0, len(pcm), self._chunk_bytes):
             ws.send_binary(encode_audio_packet(pcm[i:i + self._chunk_bytes], False))
+            final = _drain()
+            if final is not None:
+                return final  # nostream 在音频 >15s 时可能提前返回完整结果
             if self._chunk_pause > 0:
                 time.sleep(self._chunk_pause)
         ws.send_binary(encode_audio_packet(b"", True))  # 末包负包
-
-    def _read_final(self, ws) -> str:
         ws.settimeout(self._recv_timeout)
-        # 流式缓冲：ws.recv() 一次返回一条完整消息（可能含多帧/超量字节），
-        # 必须跨 read(n) 累积切片，否则消息尾部会被当「下一帧」丢弃
-        buf = bytearray()
+        deadline = time.monotonic() + self._recv_timeout
+        while True:
+            ws.settimeout(max(0.5, deadline - time.monotonic()))
+            final = _drain()
+            if final is not None:
+                return final
+            if time.monotonic() >= deadline:
+                raise AsrError("超时未收到最终识别结果")
 
-        def read(n: int) -> bytes:
-            while len(buf) < n:
-                chunk = ws.recv()
-                if not chunk:
-                    raise AsrError("连接在响应途中关闭")
-                buf.extend(chunk)
-            out = bytes(buf[:n])
-            del buf[:n]
-            return out
-
-        texts: list[str] = []
-        for _ in range(64):
-            kind, a, b = parse_frame(read)
-            if kind == "error":
-                raise AsrError(f"ASR 服务端错误 [{a}]: {b}", code=a)
-            text = ((b or {}).get("result") or {}).get("text", "")
-            if text:
-                texts.append(text)
-            if a & 0b0010:  # 最后一包：nostream 分段为累计式，最终帧即完整文本
-                return texts[-1] if texts else ""
-        raise AsrError("响应帧数超限，未收到最终结果")
+    def _read_final(self, ws) -> str:  # noqa: RET503 - 兼容保留（旧路径已并入 _send_and_read）
+        return self._send_and_read(ws, b"")
 
     def _websocket_connect(self, url: str, headers: dict):
         import websocket  # websocket-client（延迟导入与探针一致）
@@ -209,3 +236,28 @@ class VolcengineSaucClient:
             # 401 = key 无效/资源未开通（spike 实测错误形态）
             raise AsrError(f"ASR 握手被拒: HTTP {e.status_code}（检查 api_key / resource_id）",
                            code=e.status_code) from e
+
+
+def _try_parse(buf: bytearray):
+    """从缓冲区解出一帧；不完整返回 None（消耗掉的字节从 buf 删除）。"""
+    if len(buf) < 4:
+        return None
+    msg_type, flags = buf[1] >> 4, buf[1] & 0xF
+    if msg_type == 0xF:
+        if len(buf) < 12:
+            return None
+        size = struct.unpack(">I", bytes(buf[8:12]))[0]
+        if len(buf) < 12 + size:
+            return None
+        code = struct.unpack(">I", bytes(buf[4:8]))[0]
+        payload = bytes(buf[12:12 + size])
+        del buf[:12 + size]
+        return ("error", code, payload)
+    if len(buf) < 12:
+        return None
+    size = struct.unpack(">I", bytes(buf[8:12]))[0]
+    if len(buf) < 12 + size:
+        return None
+    payload = bytes(buf[12:12 + size])
+    del buf[:12 + size]
+    return ("response", flags, _maybe_gunzip(payload))

@@ -24,7 +24,8 @@ class VadTracker:
         frame_ms: int = 20,
     ) -> None:
         self.frame_ms = frame_ms
-        self._silence_frames = max(1, silence_ms // frame_ms)
+        # silence_ms <= 0：禁用「说完自动收尾」（用户偏好手动截断，2026-08-26）
+        self._silence_frames = 0 if silence_ms <= 0 else max(1, silence_ms // frame_ms)
         self._lead_in_frames = max(1, lead_in_ms // frame_ms)
         self._max_frames = max(1, max_duration_ms // frame_ms)
         self._threshold = threshold
@@ -36,7 +37,11 @@ class VadTracker:
 
     # ---------- 事件 ----------
     def feed(self, rms: float) -> Optional[str]:
-        """喂入一帧 RMS（16bit 归一化振幅）。触发自动停止时返回原因，其余返回 None。"""
+        """喂入一帧 RMS（16bit 归一化振幅）。触发自动停止时返回原因，其余返回 None。
+
+        静音停由 silence_ms<=0 禁用；lead-in（从未说话的最长等待）与
+        max_duration（总时长硬上限）不受影响。
+        """
         if self._stopped:
             return self._stop_reason
         self._frames += 1
@@ -71,7 +76,8 @@ class VadTracker:
     def _check(self) -> Optional[str]:
         if self._frames >= self._max_frames:
             return "max_duration"
-        if self._has_spoken and self._consecutive_silence >= self._silence_frames:
+        if self._silence_frames and self._has_spoken \
+                and self._consecutive_silence >= self._silence_frames:
             return "silence"
         if not self._has_spoken and self._frames >= self._lead_in_frames:
             return "no_speech"

@@ -68,13 +68,45 @@ def xclip_write_text(text: str) -> bool:
     return p.returncode == 0
 
 
-def xdotool_paste() -> bool:
-    """在当前光标处模拟 Ctrl+V（V4 听写「贴到光标处」，对齐闪电说体验）。
+# 粘贴目标窗口（录音开始时捕获；防悬浮框/焦点漂移导致贴错地方）
+_paste_target: dict = {"wid": None}
 
+
+def capture_paste_target() -> None:
+    """录音开始瞬间记录当前活动窗口 id（此时用户焦点还在目标应用上）。
+
+    悬浮框随后弹出可能抢焦点，粘贴时必须定向回这个窗口（2026-08-26 用户
+    实测「识别文字没出现在光标处」的根因）。取不到则留空，粘贴时回退
+    「当前活动窗口」语义。
+    """
+    try:
+        p = subprocess.run(["xdotool", "getactivewindow"],
+                           capture_output=True, timeout=2, encoding="utf-8")
+        wid = p.stdout.strip() if p.returncode == 0 else ""
+        _paste_target["wid"] = wid or None
+        logger.debug("粘贴目标窗口: %s", _paste_target["wid"])
+    except (OSError, subprocess.TimeoutExpired):
+        _paste_target["wid"] = None
+
+
+def xdotool_paste() -> bool:
+    """在目标窗口模拟 Ctrl+V（V4 听写「贴到光标处」，对齐闪电说体验）。
+
+    优先定向录音开始时捕获的窗口；无捕获/失败回退当前活动窗口。
     仅对 XWayland 窗口生效（Wayland 原生窗口收不到合成键），失败由 Router
-    降级为「仅剪贴板」并标注；剪贴板写入后需短暂等待 X 选区交接。
+    降级为「仅剪贴板」并标注。
     """
     time.sleep(0.15)  # xclip 守护进程接管选区需要一拍
+    wid = _paste_target.get("wid")
+    if wid:
+        try:
+            p = subprocess.run(
+                ["xdotool", "key", "--window", wid, "ctrl+v"],
+                capture_output=True, timeout=2)
+            if p.returncode == 0:
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            pass  # 定向失败回退通用路径
     try:
         p = subprocess.run(
             ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
@@ -287,6 +319,7 @@ def _wire_dictation(components, tray) -> None:
         recording = state == "recording"
         tray.set_dictation_state(recording)
         if recording:
+            capture_paste_target()  # 先记焦点窗口，悬浮框随后才弹（防抢焦点贴错）
             overlay.show()
         else:
             overlay.hide()

@@ -17,9 +17,9 @@
     "resource_id": "volc.seedasr.sauc.duration",
     "language": "auto",
     "trigger_key": "ctrl+alt+v",
-    "vad_silence_ms": 1500,
+    "vad_silence_ms": 0,
     "vad_threshold": 0.012,
-    "max_duration_sec": 60
+    "max_duration_sec": 300
   },
   "targets": {
     "desktop": { "name": "主力台式机", "hotkey": "1", "type": "local" },

@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 _WIDTH, _HEIGHT, _BARS = 280, 84, 40
 
 
+def place_x(cursor_x: int, screen_w: int, win_w: int = _WIDTH) -> int:
+    """窗口横坐标：跟随鼠标所在区域居中并夹在屏幕内（纯函数可单测）。
+
+    多显示器（X 合并屏）下「屏幕中心」会落在两屏接缝（2026-08-26 用户实测
+    「卡在两个屏幕之间」），改为围绕当前光标位置居中。
+    """
+    x = cursor_x - win_w // 2
+    return max(0, min(x, screen_w - win_w))
+
+
 class WaveformOverlay:
     """录音波形悬浮框：show() 显示 / update_level() 喂电平 / hide() 关闭。"""
 
@@ -78,11 +88,16 @@ class WaveformOverlay:
             root.attributes("-topmost", True)  # X11 置顶（Wayland 尽力而为）
         except tk.TclError:
             pass
-        # 屏幕底部居中（对齐闪电说位置习惯）
+        # 跟随鼠标所在区域定位（多屏接缝修复），底部偏上 120px
         root.update_idletasks()
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        x, y = (sw - _WIDTH) // 2, sh - _HEIGHT - 120
+        try:
+            cursor_x = root.winfo_pointerx()
+        except Exception:  # noqa: BLE001 - 无指针环境回退屏幕中心
+            cursor_x = sw // 2
+        x, y = place_x(cursor_x, sw), sh - _HEIGHT - 120
         root.geometry(f"{_WIDTH}x{_HEIGHT}+{x}+{y}")
+        self._bind_drag(root)
         root.configure(bg="#1e1e2e")
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
@@ -101,6 +116,21 @@ class WaveformOverlay:
                 pass
             self._canvas = None
             logger.debug("悬浮框已关闭")
+
+    def _bind_drag(self, root) -> None:
+        """无边框窗口手动拖动（按住任意处移动）。"""
+        state = {"dx": 0, "dy": 0}
+
+        def press(e):
+            state["dx"], state["dy"] = e.x, e.y
+
+        def drag(e):
+            x = root.winfo_x() + e.x - state["dx"]
+            y = root.winfo_y() + e.y - state["dy"]
+            root.geometry(f"+{x}+{y}")
+
+        root.bind("<Button-1>", press)
+        root.bind("<B1-Motion>", drag)
 
     def _tick(self) -> None:
         root, canvas = self._root, self._canvas

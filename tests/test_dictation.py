@@ -148,12 +148,18 @@ def test_build_request_payload_language():
 # ---------- ASR 客户端（假 WS 连接） ----------
 
 class _FakeWs:
-    """按脚本回放服务端行为的假连接；sent 记录全部发送帧。"""
+    """按脚本回放服务端行为的假连接；sent 记录全部发送帧。
+
+    超时语义对齐真实 websocket-client：短超时（发送阶段排空）无数据抛
+    WebSocketTimeoutException；长超时（等待最终结果）无数据视为连接关闭。
+    """
 
     def __init__(self, script: bytes) -> None:
         self.sent: list[bytes] = []
         self._script = script
         self._pos = 0
+        self._timeout = 30.0
+        self.gate_sends: int | None = None  # 发满 N 帧前不吐响应（模拟真时序）
         self.closed = False
 
     def send_binary(self, data: bytes) -> None:
@@ -161,13 +167,19 @@ class _FakeWs:
 
     def recv(self) -> bytes:
         chunk = self._script[self._pos:self._pos + 4096]
+        if chunk and self.gate_sends is not None and len(self.sent) < self.gate_sends:
+            chunk = b""  # 未到放行时机：走无数据分支
         if not chunk:
+            if self._timeout <= 0.5:
+                from websocket import WebSocketTimeoutException
+
+                raise WebSocketTimeoutException("timed out")
             raise AsrError("连接在响应途中关闭")
         self._pos += len(chunk)
         return chunk
 
     def settimeout(self, t: float) -> None:
-        pass
+        self._timeout = t
 
     def close(self) -> None:
         self.closed = True
@@ -183,6 +195,8 @@ def test_client_transcribe_returns_final_text():
     pcm = b"\x11\x22" * 16000  # 1 秒
     script = _response_frame("你好", 0b0001, 1) + _response_frame("你好世界", 0b0011, 2)
     ws = _FakeWs(script)
+    # 服务端在收满全部音频（full request + 块 + 末包）后才回帧
+    ws.gate_sends = 1 + (len(pcm) + 6399) // 6400 + 1
     text = _client_with(ws).transcribe(pcm)
     assert text == "你好世界"
     # 帧 0 是 full request（gzip JSON），其后音频块 + 末包负包
@@ -435,3 +449,39 @@ def test_vad_reset_clears_session_state():
     # 重置后新会话不会立即停止
     for _ in range(100):
         assert v.feed(0.0) is None
+
+
+def test_client_long_audio_flood_of_frames():
+    """长语音回归（2026-08-26 用户实测）：服务端逐块回帧，超 64 帧且发送期间
+    需持续排空，否则 socket 缓冲堵塞死锁 / 帧数上限误报。"""
+    pcm = b"\x11\x22" * 16000 * 10  # 10 秒
+    script = b"".join(
+        _response_frame("段", 0b0001, seq=i) for i in range(200)) + \
+        _response_frame("长语音完整结果", 0b0011, seq=999)
+    ws = _FakeWs(script)
+    text = _client_with(ws).transcribe(pcm)
+    assert text == "长语音完整结果"
+    assert ws.closed
+
+
+def test_vad_silence_disabled():
+    """silence_ms<=0：说完静音也不自动停（用户偏好手动截断），仅受总上限约束。"""
+    v = VadTracker(silence_ms=0, threshold=0.01, lead_in_ms=10000,
+                   max_duration_ms=60000)
+    v.feed(0.05)
+    reason = None
+    for _ in range(2000):  # 40s 静音（< 60s 总上限）
+        reason = v.feed(0.0)
+        if reason:
+            break
+    assert reason is None  # 静音停被禁用
+
+
+def test_overlay_place_x_follows_cursor():
+    from voicehub.dictation.overlay import place_x
+
+    assert place_x(960, 1920) == 960 - 140          # 光标居中
+    assert place_x(10, 1920) == 0                    # 左缘夹紧
+    assert place_x(1910, 1920) == 1920 - 280         # 右缘夹紧
+    # 双屏合并 3840：光标在右屏中段 → 窗口落在右屏内，不再骑缝
+    assert place_x(2880, 3840) == 2880 - 140

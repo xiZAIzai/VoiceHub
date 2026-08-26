@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 _WIDTH, _HEIGHT, _BARS = 280, 84, 40
 
 
+def bar_height(level: float, peak: float, max_px: int = _HEIGHT - 36) -> int:
+    """波形条高度（自适应增益）：电平相对滚动峰值归一化，说话再小声也满幅跳动。
+
+    2026-08-26 用户实测「波形不动」根因：麦克风电平绝对值很低（说话 RMS ~0.02），
+    线性画法只有 3px 底线，看起来一排死条；改为除以滚动峰值后小电平也能撑满。
+    """
+    if peak <= 0:
+        peak = 0.02
+    norm = min(1.0, level / peak)
+    return max(3, int(norm * max_px))
+
+
 def place_x(cursor_x: int, screen_w: int, win_w: int = _WIDTH) -> int:
     """窗口横坐标：跟随鼠标所在区域居中并夹在屏幕内（纯函数可单测）。
 
@@ -39,6 +51,7 @@ class WaveformOverlay:
         self._root = None
         self._canvas = None
         self._bars: list[float] = [0.0] * _BARS
+        self._peak = 0.02  # 滚动峰值（AGC）：静音下限 0.02，随说话音量自适应
         self._shown = threading.Event()
 
     # ---------- 对外 API（引擎/后端线程调用） ----------
@@ -64,9 +77,16 @@ class WaveformOverlay:
                 pass
 
     def update_level(self, rms: float) -> None:
-        """音频回调线程喂电平（0.0~1.0，超出会截断）；队列满直接丢（保实时）。"""
+        """音频回调线程喂电平（0.0~1.0，超出会截断）；队列满直接丢（保实时）。
+
+        同时维护滚动峰值（每块衰减 0.5%，~22%/s）：停止说话约 3 秒后峰值
+        回落到地板，波形自然趴下；开口即重新撑满（中途换气 1 秒只缩 ~22%，
+        不影响观感）。
+        """
+        rms = max(0.0, min(1.0, rms))
+        self._peak = max(self._peak * 0.995, rms, 0.02)
         try:
-            self._levels.put_nowait(max(0.0, min(1.0, rms)))
+            self._levels.put_nowait(rms)
         except queue.Full:
             pass
 
@@ -160,8 +180,9 @@ class WaveformOverlay:
         canvas.delete("wave")
         bw = _WIDTH // _BARS
         for i, level in enumerate(self._bars):
-            h = max(3, int(level * (_HEIGHT - 40)))
+            h = bar_height(level, self._peak)
             x0 = i * bw + 2
-            color = "#f38ba8" if level > 0.05 else "#89b4fa"
+            norm = level / max(self._peak, 0.02)
+            color = "#f38ba8" if norm > 0.6 else "#89b4fa"  # 近峰值粉红、低电平蓝
             canvas.create_rectangle(x0, _HEIGHT - 10 - h, x0 + bw - 3, _HEIGHT - 10,
                                     fill=color, outline="", tags="wave")

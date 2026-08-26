@@ -487,3 +487,26 @@ def test_overlay_place_x_follows_cursor():
     assert place_x(1910, 1920) == 1920 - 280         # 右缘夹紧
     # 双屏合并 3840：光标在右屏中段 → 窗口落在右屏内，不再骑缝
     assert place_x(2880, 3840) == 2880 - 140
+
+
+def test_overlay_bar_height_agc():
+    """自适应增益：小电平说话也满幅（2026-08-26 波形不动根因回归）。"""
+    from voicehub.dictation.overlay import bar_height
+
+    quiet_speech = 0.02
+    assert bar_height(quiet_speech, peak=quiet_speech) >= 40   # 峰值电平=满幅
+    assert bar_height(quiet_speech / 2, peak=quiet_speech) >= 20  # 半峰值≈半幅
+    assert bar_height(0.0002, peak=0.02) == 3                  # 底噪=最小条
+    assert bar_height(0.9, peak=0.02) == bar_height(0.02, peak=0.02)  # 超峰截断
+    assert bar_height(0.5, peak=0) > 3                          # peak 异常兜底
+
+
+def test_overlay_peak_tracks_and_decays():
+    from voicehub.dictation.overlay import WaveformOverlay
+
+    o = WaveformOverlay()
+    o.update_level(0.05)  # 说话
+    assert abs(o._peak - 0.05) < 1e-9  # noqa: SLF001 - 峰值跟随
+    for _ in range(200):   # 4 秒静音
+        o.update_level(0.0)
+    assert o._peak <= 0.02 + 1e-9  # noqa: SLF001 - 回落到地板

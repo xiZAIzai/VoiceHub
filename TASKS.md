@@ -116,7 +116,9 @@
   - [ ] Windows 侧验证（win32_write_text/HotkeyBackend 听写接线已备）。
   - [x] README 双引擎章节 ✅ 2026-08-27（启用三步 / 系统依赖 / 发行版兼容
     / 双引擎关系 / 润色配置说明）。
-  - [ ] 发 v0.4.0 Release。
+  - [x] 发 v0.4.0 Release ✅ 2026-08-27（CI 全绿四产物：Windows 双 zip + Linux 双
+    AppImage；平台测试三处跨平台问题当场修——触发脚本 UTF-8+LF 强制/双写 which 桩）。
+    Release notes 待粘贴（本机无 GitHub 写凭证）。
 
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 

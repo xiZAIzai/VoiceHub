@@ -54,6 +54,24 @@ class ClipboardMonitor:
         with self._lock:
             self._armed = False
 
+    def rebase_baseline_if_armed(self, snapshot: Optional[str]) -> None:
+        """武装期间把基线重锚到指定快照（V4 防抖守卫）。
+
+        场景：builtin 听写完成会把文本写入系统剪贴板；若此刻闪电说链路
+        恰在武装中，旧基线 ≠ 新剪贴板会触发一次假 settle（告警噪声）。
+        直通路由完成后调用本方法以本次写入为新基线，settle 判等即静默。
+        未武装时是 no-op（幂等，调用方无需判态）。
+        """
+        with self._lock:
+            if self._armed:
+                self._baseline = snapshot
+                self._last_change_at = None
+                self._settled = False
+
+    def snapshot_now(self) -> Optional[str]:
+        """读当前剪贴板快照（rebase 配套，避免调用方依赖底层读取实现）。"""
+        return self._read_text()
+
     def apply_params(self, stability_ms: Optional[float] = None,
                      pending_timeout_sec: Optional[float] = None) -> None:
         """设置页热应用入口（M6-③）：只更新传入的参数，None 表示不变。"""

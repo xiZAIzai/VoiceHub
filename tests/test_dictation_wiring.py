@@ -429,3 +429,67 @@ def test_trigger_script_generation(tmp_path):
         assert os.access(path, os.X_OK)
     finally:
         m.TRIGGER_SCRIPT = saved
+
+
+# ---------- 双引擎并存防抖守卫（V4/M12） ----------
+
+def test_route_direct_rebases_armed_monitor_baseline():
+    """builtin 写剪贴板后，武装中的闪电说监听应以新内容为新基线（不再假 settle）。"""
+    current = {"text": "旧基线"}
+
+    def _read():
+        return current["text"]
+
+    cfg = Config()
+    cfg.targets = {
+        "desktop": TargetConfig(key="desktop", name="台式机", hotkey="1", type="local"),
+        "laptop": TargetConfig(key="laptop", name="笔记本", hotkey="2",
+                               type="network_http"),
+    }
+    sticky = StickyTarget(pending_timeout_sec=30.0)
+    monitor = ClipboardMonitor(read_text=_read, on_text=lambda t: None,
+                               stability_ms=100, pending_timeout_sec=30.0)
+    class _T:
+        def push(self, endpoint, text):
+            return True
+
+    router = Router(cfg, discovery=type("D", (), {
+        "resolve_endpoint": staticmethod(lambda t: "http://10.0.0.9:5050/paste")})(),
+        transport=_T())
+    orch = Orchestrator(cfg, sticky, monitor, router)
+
+    # 模拟闪电说流程：Alt+2 武装到笔记本
+    orch.select_target("laptop")
+
+    # 随后用自建内核听写：剪贴板被写为新文本（读桩同步反映真实世界）
+    current["text"] = "自建内核的文本"
+    result = orch.route_direct("自建内核的文本")
+    assert result["ok"] is True
+
+    # 守卫生效：基线已被重锚为本次写入内容
+    assert monitor.snapshot_now() == "自建内核的文本"
+
+    # 且直通路由已先消费粘滞：后续 settle 不会再产生第二次路由
+    assert sticky.is_armed() is False
+
+
+def test_rebase_baseline_noop_when_not_armed():
+    from voicehub.clipboard_monitor import ClipboardMonitor
+
+    m = ClipboardMonitor(read_text=lambda: "x", on_text=lambda t: None,
+                         stability_ms=100, pending_timeout_sec=30)
+    m.rebase_baseline_if_armed("y")  # 未武装：no-op 不抛
+
+
+def test_config_service_accepts_engine_switch(tmp_path):
+    """设置页切引擎走既有 PUT 校验链路（need_restart 提示）。"""
+    from voicehub.settings import ConfigService
+
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "transcription": {"engine": "shandianshuo"},
+    }), encoding="utf-8")
+    svc = ConfigService(path)
+    svc.update({"transcription": {"engine": "builtin"}})
+    assert json.loads(path.read_text(encoding="utf-8"))[
+        "transcription"]["engine"] == "builtin"

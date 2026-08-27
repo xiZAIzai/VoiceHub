@@ -273,6 +273,46 @@ _INDEX_HTML = """<!doctype html>
           原文与润色结果双双落库，仪表盘最近转写中可见对照。
         </p>
       </div>
+      <!-- V4/M12：听写引擎切换 + 录音参数（保存后重启程序生效） -->
+      <div class="bg-slate-800 rounded-lg p-4" v-if="cfg.transcription">
+        <h2 class="text-sm text-slate-400 mb-3">听写引擎与录音参数（保存后重启程序生效）</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="text-sm">转写引擎
+            <select v-model="cfg.transcription.engine"
+                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+              <option value="shandianshuo">闪电说（剪贴板监听链路）</option>
+              <option value="builtin">自建内核（本项目 · 云端 ASR）</option>
+            </select>
+          </label>
+          <label class="text-sm">识别语言
+            <select v-model="cfg.transcription.language"
+                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+              <option value="auto">自动检测</option>
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <label class="text-sm">静音自动结束（毫秒，0=关闭）
+            <input type="number" v-model.number="cfg.transcription.vad_silence_ms"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          </label>
+          <label class="text-sm">单段最长录音（秒）
+            <input type="number" v-model.number="cfg.transcription.max_duration_sec"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          </label>
+          <label class="text-sm">未开口放弃等待（毫秒）
+            <input type="number" v-model.number="cfg.transcription.vad_lead_in_ms"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          </label>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">
+          静音自动结束 = 说完连续静音多久自动送识别（0 = 仅手动停止，推荐）；
+          未开口放弃 = 按下后一直不说多久自动放弃（不消耗云端调用）。
+          切引擎需重启；两套引擎共用 Alt+N 目标粘滞。
+        </p>
+      </div>
       <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->
       <div class="bg-slate-800 rounded-lg p-4" v-if="shortcut.supported">
         <h2 class="text-sm text-slate-400 mb-3">听写快捷键（系统级，注册后任何界面下都生效）</h2>
@@ -394,6 +434,9 @@ createApp({
           if (this.cfg.polish.custom_prompt === undefined) this.cfg.polish.custom_prompt = '';
         }
         if (this.cfg && !this.cfg.transcription) this.cfg.transcription = {};
+        if (this.cfg && this.cfg.transcription && !this.cfg.transcription.engine) {
+          this.cfg.transcription.engine = 'shandianshuo';
+        }
         if (this.cfg && this.cfg.transcription) {
           if (this.cfg.transcription.vad_silence_ms === undefined) this.cfg.transcription.vad_silence_ms = 0;
           if (this.cfg.transcription.max_duration_sec === undefined) this.cfg.transcription.max_duration_sec = 300;

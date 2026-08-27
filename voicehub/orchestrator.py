@@ -90,8 +90,15 @@ class Orchestrator:
         if target_key is None:
             logger.warning("直通路由无可用目标（未配置 targets）")
             return {"ok": False, "error": "no target", "target": None}
-        return self._router.route(text, target_key, raw_text=raw_text,
-                                  metadata=meta, deliver_local=True)
+        result = self._router.route(text, target_key, raw_text=raw_text,
+                                    metadata=meta, deliver_local=True)
+        # 防抖守卫（V4/M12）：本次写入已进剪贴板，若闪电说链路恰在武装中，
+        # 把它的基线重锚到新内容，避免假 settle 告警（幂等，未武装 no-op）
+        try:
+            self._monitor.rebase_baseline_if_armed(self._monitor.snapshot_now())
+        except Exception:  # noqa: BLE001 - 守卫失败不影响主流程
+            logger.debug("基线重锚失败", exc_info=True)
+        return result
 
     def _default_direct_target(self) -> Optional[str]:
         tc = self._config.transcription

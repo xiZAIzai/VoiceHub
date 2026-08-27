@@ -1,5 +1,8 @@
 {
-  "server": { "host": "127.0.0.1", "port": 8765 },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
   "voicehub": {
     "pending_timeout_sec": 300,
     "stability_ms": 300,
@@ -9,7 +12,9 @@
     "discovery_port": 9898,
     "receiver_port": 5050
   },
-  "shandianshuo": { "trigger_key": "alt" },
+  "shandianshuo": {
+    "trigger_key": "alt"
+  },
   "transcription": {
     "engine": "shandianshuo",
     "provider": "volcengine_sauc",
@@ -23,9 +28,21 @@
     "max_duration_sec": 300
   },
   "targets": {
-    "desktop": { "name": "主力台式机", "hotkey": "1", "type": "local" },
-    "laptop": { "name": "便携笔记本", "hotkey": "2", "type": "network_http" },
-    "tablet": { "name": "Root 安卓平板", "hotkey": "3", "type": "network_http" }
+    "desktop": {
+      "name": "主力台式机",
+      "hotkey": "1",
+      "type": "local"
+    },
+    "laptop": {
+      "name": "便携笔记本",
+      "hotkey": "2",
+      "type": "network_http"
+    },
+    "tablet": {
+      "name": "Root 安卓平板",
+      "hotkey": "3",
+      "type": "network_http"
+    }
   },
   "polish": {
     "mode": "off",
@@ -34,5 +51,8 @@
     "model": "deepseek-v4-flash",
     "timeout_sec": 20
   },
-  "storage": { "db_path": "voice_memory.db", "retention_days": 90 }
+  "storage": {
+    "db_path": "voice_memory.db",
+    "retention_days": 90
+  }
 }

@@ -87,29 +87,54 @@ class WaveformOverlay:
         self._hotkey = (hotkey or "").upper()
         self._tick_no = 0
         self._commands: "queue.Queue[str]" = queue.Queue(maxsize=16)
-        self._shown = threading.Event()
+        self._visible = threading.Event()  # 窗口当前应显示（withdraw/deiconify）
 
-    # ---------- 对外 API（引擎/后端线程调用） ----------
+    # ---------- 对外 API（引擎/后端线程调用；全部只入命令队列） ----------
     def show(self) -> None:
-        if self._shown.is_set():
+        """亮起悬浮窗：线程未起则创建（线程整个进程周期持久存在）。
+
+        Tcl 解释器必须在其创建线程内完整生命周期——反复建/毁 Tk 会触发
+        exit 时跨线程 GC 崩溃（Tcl_AsyncDelete，实测）。故 hide=withdraw、
+        show=deiconify，线程只在 close() 时随进程收口。
+        """
+        if self._thread is not None and self._thread.is_alive():
+            self._visible.set()
+            self._queue_cmd("show")
             return
         try:
             import tkinter  # noqa: F401 - 探测可用性
         except Exception as e:  # noqa: BLE001
             logger.debug("tkinter 不可用，悬浮框降级关闭: %s", e)
             return
-        self._shown.set()
-        self._thread = threading.Thread(target=self._run, name="dictation-overlay", daemon=True)
+        self._visible.set()
+        self._thread = threading.Thread(target=self._run, name="dictation-overlay",
+                                        daemon=True)
         self._thread.start()
 
     def hide(self) -> None:
-        self._shown.clear()
-        root, self._root = self._root, None
-        if root is not None:
-            try:
-                root.quit()  # 唤醒 mainloop；窗口销毁在 tk 线程做
-            except Exception:  # noqa: BLE001
-                pass
+        """收起窗口（不销毁线程）；下一拍 tick 处理。"""
+        self._visible.clear()
+        self._queue_cmd("hide")
+
+    def close(self) -> None:
+        """进程收口时调用：结束 tk 线程并清理全部 tk 对象引用。"""
+        self._visible.clear()
+        self._queue_cmd("quit")
+        t, self._thread = self._thread, None
+        if t is not None and t.is_alive():
+            t.join(timeout=3)
+
+    def set_hotkey(self, hotkey: str) -> None:
+        """后挂真实触发键显示（配置可改，组装完成后由平台后端传入）。"""
+        self._hotkey = (hotkey or "").upper()
+        if self._visible.is_set():
+            self._queue_cmd("redraw_head")
+
+    def _queue_cmd(self, cmd: str) -> None:
+        try:
+            self._commands.put_nowait(cmd)
+        except queue.Full:
+            pass
 
     def set_phase(self, phase: str) -> None:
         """切换阶段（任意线程调用）：listen=电平波形 / processing=识别中。"""
@@ -141,7 +166,8 @@ class WaveformOverlay:
 
         _text(lay["left_x"], "REC", "#a6e3a1")
         bx, bw_ = lay["mid_box"]
-        bh, by = lay["box_h"], cy - bh // 2
+        bh = lay["box_h"]
+        by = cy - bh // 2
         canvas.create_rectangle(bx + 2, by + 2, bx + bw_, by + bh,
                                 fill="#0b0b14", outline="", tags="head")   # 右下阴影
         canvas.create_line(bx, by, bx + bw_, by, fill="#94a3b8",
@@ -154,12 +180,6 @@ class WaveformOverlay:
         canvas.create_text(bx + bw_ / 2, cy, text=self._hotkey or "HOTKEY",
                            fill="#f5e0dc", font=self._font_b, tags="head")
         _text(lay["right_x"], "press again to stop", "#8892ad")
-
-    def set_hotkey(self, hotkey: str) -> None:
-        """后挂真实触发键显示（配置可改，组装完成后由平台后端传入）。"""
-        self._hotkey = (hotkey or "").upper()
-        if self._shown.is_set():
-            self._draw_heading()
 
     def update_level(self, rms: float) -> None:
         """音频回调线程喂电平（0.0~1.0，超出会截断）；队列满直接丢（保实时）。
@@ -185,7 +205,7 @@ class WaveformOverlay:
             root = tk.Tk()
         except Exception as e:  # noqa: BLE001 - 无 DISPLAY 属降级路径
             logger.debug("无显示环境，悬浮框未显示: %s", e)
-            self._shown.clear()
+            self._visible.clear()
             return
         self._root = root
         root.overrideredirect(True)  # 无边框
@@ -193,16 +213,8 @@ class WaveformOverlay:
             root.attributes("-topmost", True)  # X11 置顶（Wayland 尽力而为）
         except tk.TclError:
             pass
-        # 跟随鼠标所在区域定位（多屏接缝修复），底部偏上 120px
-        root.update_idletasks()
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        try:
-            cursor_x = root.winfo_pointerx()
-        except Exception:  # noqa: BLE001 - 无指针环境回退屏幕中心
-            cursor_x = sw // 2
-        x, y = place_x(cursor_x, sw), sh - _HEIGHT - 120
-        root.geometry(f"{_WIDTH}x{_HEIGHT}+{x}+{y}")
         self._bind_drag(root)
+        self._reposition(root)
         root.configure(bg="#1e1e2e")
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
@@ -218,13 +230,31 @@ class WaveformOverlay:
         root.after(30, self._tick)
         try:
             root.mainloop()
+        except Exception:  # noqa: BLE001 - 悬浮框死亡必须可见且不残留窗口
+            logger.exception("悬浮框线程异常退出")
         finally:
+            # 本线程内丢弃全部 tk 对象引用：CPython 引用计数即刻在本线程
+            # 完成 Tcl 资源释放（放任跨线程 GC 是 Tcl_AsyncDelete 崩溃根因）
+            self._canvas = None
+            self._root = None
+            self._font_n = self._font_b = None
+            self._heading_photos = {}
             try:
                 root.destroy()
             except Exception:  # noqa: BLE001
                 pass
-            self._canvas = None
-            logger.debug("悬浮框已关闭")
+            logger.info("悬浮框已关闭")
+
+    def _reposition(self, root) -> None:
+        """跟随鼠标所在区域定位（多屏接缝修复），底部偏上 120px。"""
+        root.update_idletasks()
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        try:
+            cursor_x = root.winfo_pointerx()
+        except Exception:  # noqa: BLE001 - 无指针环境回退屏幕中心
+            cursor_x = sw // 2
+        x, y = place_x(cursor_x, sw), sh - _HEIGHT - 120
+        root.geometry(f"{_WIDTH}x{_HEIGHT}+{x}+{y}")
 
     def _bind_drag(self, root) -> None:
         """无边框窗口手动拖动（按住任意处移动）。"""
@@ -250,9 +280,20 @@ class WaveformOverlay:
                 cmd = self._commands.get_nowait()
             except queue.Empty:
                 break
+            if cmd == "quit":
+                root.quit()
+                return
+            if cmd == "hide" and root.winfo_viewable():
+                root.withdraw()
+            elif cmd == "show" and not root.winfo_viewable():
+                # 每次亮起重定位到当前鼠标区域（用户可能换了屏操作）
+                self._reposition(root)
+                root.deiconify()
+                self._draw_heading()  # 阶段/热键可能在隐藏期间变化
             if cmd in ("listen", "processing") and cmd != self._phase:
                 self._phase = cmd
-                self._draw_heading()
+                if root.winfo_viewable():
+                    self._draw_heading()
         if self._phase == "processing":
             # 无输入电平：高斯光斑来回扫（比前版梯形更顺滑）
             self._tick_no += 1
@@ -270,10 +311,11 @@ class WaveformOverlay:
             if not drained:
                 self._bars.append(self._bars[-1] * 0.7)  # 静默衰减，波形自然回落
                 del self._bars[0]
-        if not self._shown.is_set():
-            return  # mainloop 由 hide() 的 quit 退出，这里不再续帧
-        self._draw()
-        root.after(30, self._tick)
+        visible = self._visible.is_set() and root.winfo_viewable()
+        if visible:
+            self._draw()
+        # 显示中 30fps；收起中降为 10Hz 只轮询命令（省 CPU 且保活命令通道）
+        root.after(30 if visible else 100, self._tick)
 
     def _draw(self) -> None:
         """两阶段分开绘制：listen 用 AGC 电平域、processing 直接用动画值。

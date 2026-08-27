@@ -299,7 +299,7 @@ def start_linux_backend(components) -> None:
     stop = threading.Event()
     tray = _build_tray(components, stop)
     tray.start()
-    _wire_dictation(components, tray)
+    overlay = _wire_dictation(components, tray)  # 返回悬浮框句柄供收口
 
     logger.info("Linux 后端已启动（仪表盘: http://%s:%.0f）",
                 components.config.server_host, components.config.server_port)
@@ -308,6 +308,8 @@ def start_linux_backend(components) -> None:
     except KeyboardInterrupt:
         logger.info("收到 Ctrl+C，正在退出")
     finally:
+        if overlay is not None:
+            overlay.close()  # tk 解释器在其创建线程内收口（跨线程禁毁）
         tray.stop()
         poller.stop()
         hotkeys.unregister_all()
@@ -350,7 +352,7 @@ def _wire_dictation(components, tray) -> None:
     """
     dictation = getattr(components, "dictation", None)
     if dictation is None:
-        return
+        return None
     from .dictation.overlay import WaveformOverlay
     from .notify import DesktopNotifier
 
@@ -400,3 +402,4 @@ def _wire_dictation(components, tray) -> None:
                     notifier.send("听写未成功", str(result.get("error", "未知原因")))
 
     dictation.set_on_state_change(_on_state)
+    return overlay

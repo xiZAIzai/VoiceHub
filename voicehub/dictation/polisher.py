@@ -100,9 +100,18 @@ class Polisher:
             ],
             "temperature": 0.3,
             "stream": False,
+            # 关闭混合推理模型的思考过程：实测 deepseek-v4-flash 思考时延
+            # 抖动可达数秒，听写场景不需要；不认该字段的网关 400 后去参重试
+            "thinking": {"type": "disabled"},
         }
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = self._post(url, payload, headers)
+        try:
+            resp = self._post(url, payload, headers)
+        except PolishError as e:
+            if "400" not in str(e):
+                raise
+            payload.pop("thinking")
+            resp = self._post(url, payload, headers)
         try:
             out = str(resp["choices"][0]["message"]["content"]).strip()
         except (KeyError, IndexError, TypeError) as e:

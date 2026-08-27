@@ -195,8 +195,11 @@ def test_client_transcribe_returns_final_text():
     pcm = b"\x11\x22" * 16000  # 1 秒
     script = _response_frame("你好", 0b0001, 1) + _response_frame("你好世界", 0b0011, 2)
     ws = _FakeWs(script)
-    # 服务端在收满全部音频（full request + 块 + 末包）后才回帧
-    ws.gate_sends = 1 + (len(pcm) + 6399) // 6400 + 1
+    # 服务端在收满全部音频（full request + 块 + 末包）后才回帧；
+    # 块大小取自客户端默认 chunk_ms（500ms → 10 块），末包 gate 前已计入 sends
+    from voicehub.dictation.asr_client import SAMPLE_RATE as _SR
+    chunks = (len(pcm) + (_SR * 2 * 500 // 1000) - 1) // (_SR * 2 * 500 // 1000)
+    ws.gate_sends = 1 + chunks + 1
     text = _client_with(ws).transcribe(pcm)
     assert text == "你好世界"
     # 帧 0 是 full request（gzip JSON），其后音频块 + 末包负包

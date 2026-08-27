@@ -115,8 +115,10 @@ class VolcengineSaucClient:
         language: str = "auto",
         connect_timeout_sec: float = 10.0,
         recv_timeout_sec: float = 30.0,
-        chunk_ms: int = 200,
-        chunk_pause_sec: float = 0.02,
+        # nostream 模式上传 pacing 无讲究（服务端收完才识别），大块快发把
+        # 上传耗时从音频时长量级压到亚秒（2026-08-27 实测 10s 音频 4.7→2.2s）
+        chunk_ms: int = 500,
+        chunk_pause_sec: float = 0.0,
         connect: Optional[Callable[[str, dict], object]] = None,
         app_key: str = "",
         access_key: str = "",

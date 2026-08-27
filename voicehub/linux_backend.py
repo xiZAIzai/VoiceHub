@@ -98,24 +98,29 @@ def xdotool_paste() -> bool:
     """
     time.sleep(0.15)  # xclip 守护进程接管选区需要一拍
     wid = _paste_target.get("wid")
-    if wid:
+
+    def _send_key(args):
         try:
-            p = subprocess.run(
-                ["xdotool", "key", "--window", wid, "ctrl+v"],
-                capture_output=True, timeout=2)
-            if p.returncode == 0:
-                return True
+            p = subprocess.run(["xdotool", *args],
+                               capture_output=True, timeout=3)
+            return p.returncode == 0
         except (OSError, subprocess.TimeoutExpired):
-            pass  # 定向失败回退通用路径
-    try:
-        p = subprocess.run(
-            ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
-            capture_output=True, timeout=2,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        logger.debug("xdotool 不可用，跳过光标粘贴")
-        return False
-    return p.returncode == 0
+            return False
+
+    # 链式尝试（2026-08-27 用户实测 --window 直接发键在 wlcom 下无效）：
+    # ① 窗口存在则先激活（XWayland 窗口激活会拉起合成器焦点）再全局发键；
+    # ② 不激活直接定向发键；③ 回退当前活动窗口全局键
+    if wid and _send_key(["windowactivate", "--sync", wid]):
+        time.sleep(0.08)
+        if _send_key(["key", "--clearmodifiers", "ctrl+v"]):
+            return True
+    if wid and _send_key(["key", "--window", wid, "--clearmodifiers", "ctrl+v"]):
+        return True
+    if _send_key(["getactivewindow"]) and \
+            _send_key(["key", "--clearmodifiers", "ctrl+v"]):
+        return True
+    logger.debug("光标粘贴全链失败（目标窗=%s；Wayland 原生窗口为已知边界）", wid)
+    return False
 
 
 class X11ClipboardPoller:

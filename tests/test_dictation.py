@@ -541,50 +541,20 @@ def test_overlay_phase_switch_and_processing_animation():
         return before != o._bars
 
     assert _tick_capture() is True  # 扫光改变了条形分布
-    assert o._heading().startswith("正在识别")
+    assert "RECOGNIZING" in o._heading()
 
 
 # ---------- 悬浮框 UI 重构（2026-08-27 乱码/红柱修复） ----------
 
-def test_resolve_cjk_font_file_via_fc_match(monkeypatch):
-    from voicehub.dictation.overlay import resolve_cjk_font_file
+def test_headings_are_pure_ascii():
+    """乱码终极回归（2026-08-27 用户定案英文标题）：恒为 ASCII。"""
+    from voicehub.dictation.overlay import WaveformOverlay
 
-    # 正常 fc-match 返回存在的 ttf
-    monkeypatch.setenv("PATH", "")  # 禁 which 走注入路径
-    fake = "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
-    calls = []
-
-    def fake_fc(*args, **kw):
-        calls.append(1)
-        class R:
-            returncode = 0
-            stdout = fake.encode()
-        return R()
-
-    import subprocess as sp
-    monkeypatch.setattr(sp, "run", fake_fc)
-    got = resolve_cjk_font_file(fc_match="ignored")
-    assert got == fake and calls
-
-    # 返回非字体文件 → None
-    def bad(*a, **k):
-        class R2:
-            returncode = 0
-            stdout = b"/etc/passwd"
-        return R2()
-    monkeypatch.setattr(sp, "run", bad)
-    assert resolve_cjk_font_file(fc_match="x") is None
-
-
-def test_heading_image_renders_chinese(monkeypatch):
-    """PIL 位图标题：中文可渲染且尺寸合理（tk 字体乱码的根治回归）。"""
-    from voicehub.dictation.overlay import heading_image, resolve_cjk_font_file
-
-    file = resolve_cjk_font_file()  # 本机必有（fc-match :lang=zh 实测可用）
-    assert file, "系统无中文字库，标题位图方案失效"
-    img = heading_image("正在识别…", file)
-    assert img is not None and img.width > 40 and img.height > 10
-    assert heading_image("正在识别…", "/nonexistent.ttf") is None  # 坏路径降级
+    o = WaveformOverlay()
+    for phase in ("listen", "processing"):
+        o._phase = phase  # noqa: SLF001
+        h = o._heading()
+        assert h.isascii(), f"{h!r} 含非 ASCII 字符"
 
 
 def test_sweep_bars_gaussian_shape():

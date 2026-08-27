@@ -74,6 +74,9 @@ def make_trigger_script(port: int, fallback_cmd: str) -> str:
     with open(path, "w", encoding="utf-8") as f:
         f.write("#!/bin/sh\n"
                 "# VoiceHub 听写触发器（注册时生成，勿手改）\n"
+                "# 追踪：纳秒时间戳落日志，与 voicehub.log 对照定位派发延迟\n"
+                "printf '%s\\n' \"$(date +%s%N)\" "
+                ">> \"${HOME}/.local/share/voicehub/trigger-trace.log\"\n"
                 "curl -s -m 3 -X POST "
                 "http://127.0.0.1:" + str(port) + "/api/dictate/toggle >/dev/null\n"
                 "[ $? -eq 0 ] || exec " + fallback_cmd + " --dictate\n")

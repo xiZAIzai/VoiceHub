@@ -71,7 +71,8 @@ def make_trigger_script(port: int, fallback_cmd: str) -> str:
 
     path = os.path.expanduser(TRIGGER_SCRIPT)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    # 强制 UTF-8 + LF：Windows 默认 cp1252/CRLF 会让中文注释写崩、sh 无法执行
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("#!/bin/sh\n"
                 "# VoiceHub 听写触发器（注册时生成，勿手改）\n"
                 "# 追踪：纳秒时间戳落日志，与 voicehub.log 对照定位派发延迟\n"

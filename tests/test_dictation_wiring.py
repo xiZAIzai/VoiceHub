@@ -398,19 +398,29 @@ def test_capture_takes_stop_moment_focus(monkeypatch):
 # ---------- 双通道剪贴板 + 快速触发脚本（2026-08-27 两实测修复） ----------
 
 def test_clipboard_writer_uses_dual_channel(monkeypatch):
+    import shutil
+
     import voicehub.linux_backend as lb
 
     calls = []
     monkeypatch.setattr(lb, "xclip_write_text", lambda t: calls.append("xclip") or True)
     monkeypatch.setattr(lb, "wl_copy_write_text", lambda t: calls.append("wlcopy") or True)
+    monkeypatch.setattr(shutil, "which",
+                        lambda name: "/usr/bin/wl-copy" if name == "wl-copy" else None)
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     assert lb.write_clipboard_text("文本") is True
-    assert calls == ["wlcopy", "xclip"]  # 双写
+    assert calls == ["wlcopy", "xclip"]  # 双写（which 探测通过）
 
     calls.clear()
     monkeypatch.delenv("WAYLAND_DISPLAY")
     assert lb.write_clipboard_text("文本") is True
     assert calls == ["xclip"]  # 纯 X 会话单写
+
+    calls.clear()
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    monkeypatch.setattr(shutil, "which", lambda name: None)  # 无 wl-copy 的机器
+    assert lb.write_clipboard_text("文本") is True
+    assert calls == ["xclip"]  # 探测失败优雅单写（CI 实测回归）
 
 
 def test_trigger_script_generation(tmp_path):
@@ -422,7 +432,8 @@ def test_trigger_script_generation(tmp_path):
     try:
         m.TRIGGER_SCRIPT = str(script)
         path = make_trigger_script(8765, '"/tmp/App.Image"')
-        body = open(path).read()
+        body = open(path, encoding="utf-8").read()
+        assert "\r" not in body  # LF 强制（Windows CRLF 会让 sh 脚本无法执行）
         assert "8765/api/dictate/toggle" in body
         assert '/tmp/App.Image" --dictate' in body.replace("\\\"", "\"") or "--dictate" in body
         import os

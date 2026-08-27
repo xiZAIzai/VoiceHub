@@ -302,6 +302,37 @@ def test_tray_dictation_state_swaps_pixmap():
 
 # ---------- UKUI 快捷键格式转换（纯函数） ----------
 
+def test_accel_to_display_variants():
+    from voicehub.ukui_shortcut import accel_to_display
+
+    assert accel_to_display("<alt>9") == "Alt+9"
+    assert accel_to_display("<ctrl><alt>v") == "Ctrl+Alt+V"
+    assert accel_to_display("<super>f3") == "Super+F3"
+    assert accel_to_display("9") == "9"
+
+
+def test_system_hotkey_display_priority(monkeypatch):
+    """键帽应显示 UKUI 实际注册键位，而非内部配置的兜底键。"""
+    import voicehub.linux_backend as lb
+
+    monkeypatch.setattr(lb, "_find_slot_for_test",
+                        lambda: {"binding": "<alt>9"}, raising=False)
+    lb_ns = lb
+
+    def fake_find():
+        import voicehub.ukui_shortcut as m
+        orig = m.find_dictate_slot
+        return {"slot": 0, "binding": "<alt>9"}
+
+    monkeypatch.setattr("voicehub.ukui_shortcut.find_dictate_slot",
+                        lambda: {"binding": "<alt>9"})
+    assert lb._system_hotkey_display() == "Alt+9"
+
+    monkeypatch.setattr("voicehub.ukui_shortcut.find_dictate_slot",
+                        lambda: None)
+    assert lb._system_hotkey_display() == ""  # 无注册回退空（调用方再用内部键）
+
+
 def test_to_gtk_accel_variants():
     from voicehub.ukui_shortcut import to_gtk_accel
 

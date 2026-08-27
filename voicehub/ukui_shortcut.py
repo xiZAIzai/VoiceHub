@@ -165,6 +165,19 @@ def write_desktop_file() -> Optional[str]:
     return path
 
 
+def accel_to_display(accel: str) -> str:
+    """'<ctrl><alt>9' → 'Ctrl+Alt+9'（悬浮框键帽展示格式）。纯函数可单测。"""
+    parts = [p.strip() for p in accel.split(">") if p.strip()]
+    parts = [p.lstrip("<") for p in parts]
+    out = []
+    for p in parts:
+        low = p.lower()
+        named = {"ctrl": "Ctrl", "control": "Ctrl", "alt": "Alt", "shift": "Shift",
+                 "super": "Super", "win": "Super", "meta": "Super"}
+        out.append(named.get(low, p.upper() if len(p) == 1 else p.capitalize()))
+    return "+".join(out)
+
+
 def find_dictate_slot() -> Optional[dict]:
     """找到已注册的听写快捷键槽位；无则 None。返回 {slot, binding, action}。"""
     for n in range(MAX_SLOTS):

@@ -333,6 +333,19 @@ def _build_tray(components, stop: threading.Event):
     )
 
 
+def _system_hotkey_display() -> str:
+    """读 UKUI 注册的听写键位并转展示格式；无注册返回空串。"""
+    try:
+        from .ukui_shortcut import accel_to_display, find_dictate_slot
+
+        found = find_dictate_slot()
+        if found and found.get("binding"):
+            return accel_to_display(found["binding"])
+    except Exception:  # noqa: BLE001 - 非 UKUI 环境静默走内部键
+        pass
+    return ""
+
+
 def _system_shortcut_registered() -> bool:
     """UKUI 系统快捷键（--dictate 通道）是否已由本产品注册。失败按未注册处理。"""
     try:
@@ -357,8 +370,11 @@ def _wire_dictation(components, tray) -> None:
     from .notify import DesktopNotifier
 
     notifier = DesktopNotifier()
-    overlay = WaveformOverlay(
-        hotkey=(components.config.transcription.trigger_key or "").upper())
+    # 键帽显示真实生效的热键：UKUI 系统注册绑定优先（用户在仪表盘改过即跟随），
+    # 未注册时才是内部 pynput 兜底键。2026-08-27 用户实测指出曾错显 Ctrl+Alt+V。
+    hotkey = _system_hotkey_display() or \
+        (components.config.transcription.trigger_key or "")
+    overlay = WaveformOverlay(hotkey=hotkey)
     recorder = getattr(dictation, "recorder", None)
     if recorder is not None and hasattr(recorder, "set_level_callback"):
         recorder.set_level_callback(overlay.update_level)

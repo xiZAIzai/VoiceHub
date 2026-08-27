@@ -177,6 +177,12 @@
 
 #### Milestone 12：体验完善（润色 / 状态可视化 / Wayland 稳触发）
 
+- ~~润色四模式~~ ✅ 2026-08-26（polisher.py 落地，light/structured/custom + 关闭降级原文）。
+- 【后续·时间允许】**光标处直接粘贴**：xdotool 焦点注入在 kylin-wlcom 多场景不稳定
+  （抢焦、定向键无效，2026-08-27 两轮修复仍未达标，用户定案暂缓）。现状=文字进剪贴板
+  （对齐「Ctrl+C」语义），用户手动 Ctrl+V 上屏。代码保留（transcription.auto_paste 开关 +
+  链式注入），待方向：wlcom/Wayland 协议层输入注入或快捷键触发粘贴的受控窗口方案。
+
 - LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
 - 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态（WS 通道已有）。
 - UKUI 系统快捷键 CLI（`--dictate` 子命令 + UKUI 设置指引）：Wayland 下最稳触发方式。

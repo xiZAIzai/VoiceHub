@@ -16,6 +16,7 @@
     "base_url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream",
     "resource_id": "volc.seedasr.sauc.duration",
     "language": "auto",
+    "auto_paste": false,
     "trigger_key": "ctrl+alt+v",
     "vad_silence_ms": 0,
     "vad_threshold": 0.012,

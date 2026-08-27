@@ -75,9 +75,10 @@ class TranscriptionConfig:
     trigger_key: str = "ctrl+alt+v"
     # 无粘滞目标时直通路由的默认目标；空 = 第一个 local 目标
     default_target: str = ""
-    # 识别后除写剪贴板外，在光标处自动模拟 Ctrl+V（xdotool；Wayland 原生窗口可能不生效，
-    # 失败自动退回仅剪贴板模式）
-    auto_paste: bool = True
+    # 光标处自动粘贴（xdotool 合成键）：Wayland 下焦点注入不可靠（2026-08-27
+    # 用户实测多场景不稳定，定案默认关闭）——文字进剪贴板由用户 Ctrl+V，
+    # 闪电说同款「免粘贴」体验待系统层方案后启用（PLAN V4 后续清单）
+    auto_paste: bool = False
     # 录音参数
     sample_rate: int = 16000
     # VAD：静音自动停（说过话后连续静音判定结束，0=关闭，默认关——用户偏好

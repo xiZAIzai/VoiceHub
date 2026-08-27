@@ -317,13 +317,9 @@ def test_to_gtk_accel_variants():
 
 def test_deliver_local_auto_paste_at_cursor():
     pasted = []
-
-    def _paste():
-        pasted.append(1)
-        return True
-
     r = _router(clipboard_write=lambda t: True)
-    r._paste_at_cursor = _paste  # noqa: SLF001 - 测试注入
+    r._config.transcription.auto_paste = True  # noqa: SLF001 - 默认关闭，显式开启测试
+    r._paste_at_cursor = lambda: pasted.append(1) or True  # noqa: SLF001
     result = r.route("文本", "desktop", deliver_local=True)
     assert result["ok"] is True and pasted == [1]
 

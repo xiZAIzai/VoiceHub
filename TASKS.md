@@ -106,11 +106,11 @@
   （kylin-wlcom 下 xclip 内容原生侧不可见的根治）；快速触发脚本
   （curl 直打实例，Alt+9 响应 2~4s→65ms）；auto_paste 光标注入两轮攻坚未达
   标，用户定案暂缓（机制保留，PLAN 后续清单）。
+- [x] **双引擎改进轮** ✅ 2026-08-27（走查后落地）：设置页「转写引擎」下拉
+  （ConfigService 链路，engine 归位主配置层、local 只留凭证）；
+  直通写剪贴板防抖守卫（rebase_baseline_if_armed，幂等）。
 - [ ] **M12 余项**
   - [ ] 仪表盘实时听写状态卡（engine.state WS 推送）+ 托盘 tooltip 阶段文案。
-  - [ ] 引擎切换设置页 UI（当前切 builtin 仍需手编 config.local.json）。
-  - [ ] 双引擎并存防抖守卫：builtin 写剪贴板时若闪电说武装中应跳过 settle
-    （现仅告警噪声，无实际重复路由——低成本守卫更稳）。
 - [ ] **M13：工程化收尾 + v0.4.0**
   - [ ] spec 已收编 sounddevice/websocket/tkinter ✅；CI 冒烟补无麦克风跳过项。
   - [ ] Windows 侧验证（win32_write_text/HotkeyBackend 听写接线已备）。

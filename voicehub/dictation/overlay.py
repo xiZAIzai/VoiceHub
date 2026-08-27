@@ -32,6 +32,31 @@ def bar_height(level: float, peak: float, max_px: int = _HEIGHT - 36) -> int:
     return max(3, int(norm * max_px))
 
 
+_FONT_CANDIDATES = (
+    "Noto Sans CJK SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei",
+    "Source Han Sans SC", "Microsoft YaHei", "SimHei",
+    "ukai", "AR PL UMing CN",
+)
+
+
+def pick_font_family(available) -> Optional[str]:
+    """从已安装字体里挑第一个含中文字形的；纯函数可单测。"""
+    have = set(available)
+    for cand in _FONT_CANDIDATES:
+        if cand in have:
+            return cand
+    return None
+
+
+def sweep_bars(tick_no: int, bars_count: int = _BARS) -> list[float]:
+    """处理期第 tick_no 帧的条形值（0~1 高斯光斑来回扫）。纯函数可单测。"""
+    center = (bars_count - 1) * (0.5 + 0.5 * math.sin(tick_no / 5))
+    return [
+        round(max(0.06, math.exp(-((i - center) ** 2) / 14)), 3)
+        for i in range(bars_count)
+    ]
+
+
 def place_x(cursor_x: int, screen_w: int, win_w: int = _WIDTH) -> int:
     """窗口横坐标：跟随鼠标所在区域居中并夹在屏幕内（纯函数可单测）。
 
@@ -137,8 +162,18 @@ class WaveformOverlay:
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
         canvas.pack()
-        canvas.create_text(_WIDTH // 2, 16, text=self._heading(), fill="#cdd6f4",
-                           font=("Noto Sans CJK SC", 11, "bold"))
+        # 乱码修复：不写死字体族——运行时挑系统中文字体，找不到用默认
+        # （数值字号走 Xft 回退，天然支持本地化），否则中文变豆腐块
+        try:
+            import tkinter.font as tkfont
+
+            fam = pick_font_family(tkfont.families(root))
+            self._font = ((fam, 11, "bold") if fam else 12)
+        except Exception:  # noqa: BLE001 - 字体枚举失败用默认
+            self._font = 12
+        self._heading_id = canvas.create_text(
+            _WIDTH // 2, 16, text=self._heading(), fill="#cdd6f4",
+            font=self._font)
         self._canvas = canvas
         self._draw()
         root.after(30, self._tick)
@@ -176,15 +211,16 @@ class WaveformOverlay:
                 cmd = self._commands.get_nowait()
             except queue.Empty:
                 break
-            if cmd in ("listen", "processing"):
+            if cmd in ("listen", "processing") and cmd != self._phase:
                 self._phase = cmd
+                try:
+                    canvas.itemconfigure(self._heading_id, text=self._heading())
+                except Exception:  # noqa: BLE001 - 标题刷新失败不影响波形
+                    pass
         if self._phase == "processing":
-            # 无输入电平：画一道来回扫光表达「进行中」
+            # 无输入电平：高斯光斑来回扫（比前版梯形更顺滑）
             self._tick_no += 1
-            center = (_BARS - 1) * (0.5 + 0.5 * math.sin(self._tick_no / 6))
-            for i in range(_BARS):
-                dist = abs(i - center)
-                self._bars[i] = max(0.05, 1.0 - dist / 6)
+            self._bars = sweep_bars(self._tick_no)
         else:
             drained = False
             while True:
@@ -204,15 +240,26 @@ class WaveformOverlay:
         root.after(30, self._tick)
 
     def _draw(self) -> None:
+        """两阶段分开绘制：listen 用 AGC 电平域、processing 直接用动画值。
+
+        红柱事故（2026-08-27）根因：动画值曾误入麦克风 AGC 域（语音峰值仅
+        ~0.02），归一化后全部爆表顶格标红。
+        """
         canvas = self._canvas
         if canvas is None:
             return
         canvas.delete("wave")
         bw = _WIDTH // _BARS
+        top = _HEIGHT - 36
         for i, level in enumerate(self._bars):
-            h = bar_height(level, self._peak)
             x0 = i * bw + 2
-            norm = level / max(self._peak, 0.02)
-            color = "#f38ba8" if norm > 0.6 else "#89b4fa"  # 近峰值粉红、低电平蓝
+            if self._phase == "processing":
+                v = min(1.0, max(0.0, level))          # 动画值即 0~1
+                h = max(3, int(v * top))
+                color = "#cba6f7" if v > 0.35 else "#89b4fa"  # 光斑紫、余晖蓝
+            else:
+                h = bar_height(level, self._peak)
+                norm = level / max(self._peak, 0.02)
+                color = "#f38ba8" if norm > 0.6 else "#89b4fa"
             canvas.create_rectangle(x0, _HEIGHT - 10 - h, x0 + bw - 3, _HEIGHT - 10,
                                     fill=color, outline="", tags="wave")

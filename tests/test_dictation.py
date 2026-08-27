@@ -542,3 +542,40 @@ def test_overlay_phase_switch_and_processing_animation():
 
     assert _tick_capture() is True  # 扫光改变了条形分布
     assert o._heading().startswith("正在识别")
+
+
+# ---------- 悬浮框 UI 重构（2026-08-27 乱码/红柱修复） ----------
+
+def test_pick_font_family_falls_back_to_none():
+    from voicehub.dictation.overlay import pick_font_family
+
+    assert pick_font_family(["Noto Sans CJK SC", "DejaVu Sans"]) == "Noto Sans CJK SC"
+    assert pick_font_family(["WenQuanYi Micro Hei"]) == "WenQuanYi Micro Hei"
+    assert pick_font_family(["DejaVu Sans", "Liberation Mono"]) is None  # 无中文字体→默认
+
+
+def test_sweep_bars_gaussian_shape():
+    from voicehub.dictation.overlay import sweep_bars
+
+    bars = sweep_bars(0)
+    assert len(bars) == 40
+    assert all(0.06 <= v <= 1.0 for v in bars)
+    peak_i = bars.index(max(bars))
+    if peak_i + 1 < len(bars):  # 光斑从峰值向右单调衰减
+        right = bars[peak_i:]
+        assert all(a >= b - 1e-9 for a, b in zip(right, right[1:]))
+    # 帧推进后光斑移动
+    assert sweep_bars(6) != bars
+
+
+def test_processing_bars_not_in_agc_domain():
+    """红柱事故回归：processing 阶段绘制直接用动画值（绕开麦克风 AGC 域），
+    复刻 _draw 分支数学，光斑应有完整的高低层次而非全部顶格。"""
+    from voicehub.dictation.overlay import sweep_bars, _BARS, _HEIGHT
+
+    top = _HEIGHT - 36
+    bars = sweep_bars(3)
+    tops = [int(min(1.0, max(0.0, v)) * top) for v in bars]  # 与 _draw 同式
+    assert max(tops) >= int(0.9 * top)   # 光斑中心接近满幅
+    assert min(tops) < int(0.15 * top)   # 边缘只剩余晖（层次分明）
+    assert len(set(tops)) > 5            # 不是一排等高红柱

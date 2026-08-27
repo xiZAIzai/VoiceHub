@@ -10,6 +10,7 @@ tk 主循环 30ms 刷新。Wayland 会话下走 XWayland 显示（置顶尽力�
 from __future__ import annotations
 
 import logging
+import math
 import queue
 import threading
 from typing import Optional
@@ -52,6 +53,9 @@ class WaveformOverlay:
         self._canvas = None
         self._bars: list[float] = [0.0] * _BARS
         self._peak = 0.02  # 滚动峰值（AGC）：静音下限 0.02，随说话音量自适应
+        self._phase = "listen"  # listen（电平波形）| processing（识别中扫光）
+        self._tick_no = 0
+        self._commands: "queue.Queue[str]" = queue.Queue(maxsize=16)
         self._shown = threading.Event()
 
     # ---------- 对外 API（引擎/后端线程调用） ----------
@@ -75,6 +79,17 @@ class WaveformOverlay:
                 root.quit()  # 唤醒 mainloop；窗口销毁在 tk 线程做
             except Exception:  # noqa: BLE001
                 pass
+
+    def set_phase(self, phase: str) -> None:
+        """切换阶段（任意线程调用）：listen=电平波形 / processing=识别中。"""
+        try:
+            self._commands.put_nowait(phase)
+        except queue.Full:
+            pass
+
+    def _heading(self) -> str:
+        return "正在识别…" if self._phase == "processing" else \
+            "正在听写…（再按一次结束）"
 
     def update_level(self, rms: float) -> None:
         """音频回调线程喂电平（0.0~1.0，超出会截断）；队列满直接丢（保实时）。
@@ -122,7 +137,7 @@ class WaveformOverlay:
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
         canvas.pack()
-        canvas.create_text(_WIDTH // 2, 16, text=self._title, fill="#cdd6f4",
+        canvas.create_text(_WIDTH // 2, 16, text=self._heading(), fill="#cdd6f4",
                            font=("Noto Sans CJK SC", 11, "bold"))
         self._canvas = canvas
         self._draw()
@@ -156,18 +171,33 @@ class WaveformOverlay:
         root, canvas = self._root, self._canvas
         if root is None or canvas is None:
             return
-        drained = False
         while True:
             try:
-                level = self._levels.get_nowait()
+                cmd = self._commands.get_nowait()
             except queue.Empty:
                 break
-            self._bars.append(level)
-            del self._bars[0]
-            drained = True
-        if not drained:
-            self._bars.append(self._bars[-1] * 0.7)  # 静默衰减，波形自然回落
-            del self._bars[0]
+            if cmd in ("listen", "processing"):
+                self._phase = cmd
+        if self._phase == "processing":
+            # 无输入电平：画一道来回扫光表达「进行中」
+            self._tick_no += 1
+            center = (_BARS - 1) * (0.5 + 0.5 * math.sin(self._tick_no / 6))
+            for i in range(_BARS):
+                dist = abs(i - center)
+                self._bars[i] = max(0.05, 1.0 - dist / 6)
+        else:
+            drained = False
+            while True:
+                try:
+                    level = self._levels.get_nowait()
+                except queue.Empty:
+                    break
+                self._bars.append(level)
+                del self._bars[0]
+                drained = True
+            if not drained:
+                self._bars.append(self._bars[-1] * 0.7)  # 静默衰减，波形自然回落
+                del self._bars[0]
         if not self._shown.is_set():
             return  # mainloop 由 hide() 的 quit 退出，这里不再续帧
         self._draw()

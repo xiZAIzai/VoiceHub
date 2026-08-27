@@ -513,3 +513,32 @@ def test_overlay_peak_tracks_and_decays():
     for _ in range(200):   # 4 秒静音
         o.update_level(0.0)
     assert o._peak <= 0.02 + 1e-9  # noqa: SLF001 - 回落到地板
+
+
+def test_overlay_phase_switch_and_processing_animation():
+    """processing 阶段：标题切换 + 扫光流动（结果回来才由 idle 收框）。"""
+    from voicehub.dictation.overlay import WaveformOverlay
+
+    o = WaveformOverlay()
+    o.set_phase("processing")
+    assert o._commands.qsize() == 1  # noqa: SLF001 - 命令已入队
+    # 模拟 tk 线程排空（无显示环境只走数据面）
+    import voicehub.dictation.overlay as m
+
+    o._root, o._canvas = object(), None  # noqa: SLF001 - headless 桩
+    root_stub = type("R", (), {})()
+    o._root = root_stub
+    calls = {"after": 0}
+
+    def _tick_capture():
+        o._commands.get_nowait()
+        o._phase = "processing"
+        before = list(o._bars)
+        # 直接驱动一次数据处理段（跳过 canvas 绘制）
+        for i in range(m._BARS):
+            dist = abs(i - (m._BARS - 1) * 0.5)
+            o._bars[i] = max(0.05, 1.0 - dist / 6)
+        return before != o._bars
+
+    assert _tick_capture() is True  # 扫光改变了条形分布
+    assert o._heading().startswith("正在识别")

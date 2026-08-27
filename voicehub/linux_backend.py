@@ -375,13 +375,16 @@ def _wire_dictation(components, tray) -> None:
         if recording:
             # 先记开始落点，悬浮框随后才弹（会抢焦）——弹后立即把焦点还回去
             capture_paste_target()
+            overlay.set_phase("listen")
             overlay.show()
             start_wid = _paste_target.get("wid")
             if start_wid:
                 _refocus_later(start_wid)
         elif state == "processing":
-            # 用户可能在录音期间点了新的位置：停止时刻的落点优先
+            # 用户可能在录音期间点了新的位置：停止时刻的落点优先；
+            # 框不关，切「正在识别…」扫光陪跑完 ASR+润色（2026-08-27 用户提案）
             capture_paste_target()
+            overlay.set_phase("processing")
         else:
             overlay.hide()
             if state == "idle":

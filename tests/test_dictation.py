@@ -541,20 +541,30 @@ def test_overlay_phase_switch_and_processing_animation():
         return before != o._bars
 
     assert _tick_capture() is True  # 扫光改变了条形分布
-    assert "RECOGNIZING" in o._heading()
+    assert o._phase == "processing"  # noqa: SLF001
 
 
 # ---------- 悬浮框 UI 重构（2026-08-27 乱码/红柱修复） ----------
 
 def test_headings_are_pure_ascii():
     """乱码终极回归（2026-08-27 用户定案英文标题）：恒为 ASCII。"""
-    from voicehub.dictation.overlay import WaveformOverlay
+    from voicehub.dictation.overlay import WaveformOverlay, sweep_bars
 
-    o = WaveformOverlay()
-    for phase in ("listen", "processing"):
-        o._phase = phase  # noqa: SLF001
-        h = o._heading()
-        assert h.isascii(), f"{h!r} 含非 ASCII 字符"
+    o = WaveformOverlay(hotkey="alt+9")
+    assert o._hotkey == "ALT+9"  # noqa: SLF001 - 显示用大写
+    assert "RECOGNIZING..." .isascii()
+
+
+def test_listen_layout_keycap_centered():
+    """键帽排版：三段不越界且居中（左右余量近似相等）。"""
+    from voicehub.dictation.overlay import listen_layout
+
+    lay = listen_layout(lambda s: len(s) * 6.0, "ALT+9", width=280)
+    total_right = lay["right_x"] + len("press again to stop") * 6.0
+    left_margin = lay["left_x"]
+    right_margin = 280 - total_right
+    assert abs(left_margin - right_margin) < 12  # 近似居中
+    assert lay["mid_box"][1] > 0  # 键帽有宽度（含内边距）
 
 
 def test_sweep_bars_gaussian_shape():

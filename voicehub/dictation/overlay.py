@@ -32,6 +32,27 @@ def bar_height(level: float, peak: float, max_px: int = _HEIGHT - 36) -> int:
     return max(3, int(norm * max_px))
 
 
+def listen_layout(measure: Callable[[str], float], hotkey: str,
+                  width: int = _WIDTH) -> dict:
+    """听写期标题排版：「REC [热键] press again to stop」（键帽居中）。
+
+    measure 为字体测宽函数（注入便于单测）；返回各段起点与键帽盒尺寸。
+    """
+    gap = 8
+    kbd_pad = 7  # 键帽左右内边距
+    wl = measure("REC")
+    wm = measure(hotkey or "HOTKEY") + kbd_pad * 2
+    wr = measure("press again to stop")
+    total = wl + gap + wm + gap + wr
+    x0 = max(0, (width - total) / 2)
+    return {
+        "left_x": x0,
+        "mid_box": (x0 + wl + gap, wm),
+        "right_x": x0 + wl + gap + wm + gap,
+        "box_h": 18,
+    }
+
+
 def sweep_bars(tick_no: int, bars_count: int = _BARS) -> list[float]:
     """处理期第 tick_no 帧的条形值（0~1 高斯光斑来回扫）。纯函数可单测。"""
     center = (bars_count - 1) * (0.5 + 0.5 * math.sin(tick_no / 5))
@@ -54,7 +75,7 @@ def place_x(cursor_x: int, screen_w: int, win_w: int = _WIDTH) -> int:
 class WaveformOverlay:
     """录音波形悬浮框：show() 显示 / update_level() 喂电平 / hide() 关闭。"""
 
-    def __init__(self, title: str = "REC") -> None:
+    def __init__(self, title: str = "REC", hotkey: str = "") -> None:
         self._title = title
         self._levels: "queue.Queue[float]" = queue.Queue(maxsize=64)
         self._thread: Optional[threading.Thread] = None
@@ -63,6 +84,7 @@ class WaveformOverlay:
         self._bars: list[float] = [0.0] * _BARS
         self._peak = 0.02  # 滚动峰值（AGC）：静音下限 0.02，随说话音量自适应
         self._phase = "listen"  # listen（电平波形）| processing（识别中扫光）
+        self._hotkey = (hotkey or "").upper()
         self._tick_no = 0
         self._commands: "queue.Queue[str]" = queue.Queue(maxsize=16)
         self._shown = threading.Event()
@@ -96,11 +118,48 @@ class WaveformOverlay:
         except queue.Full:
             pass
 
-    def _heading(self) -> str:
-        """英文标题（2026-08-27 用户定案）：ASCII 在任何字体环境下都不会
-        出现豆腐块/符号顶包；中文曾两轮尝试（tk 字体族/PIL 位图）均不稳。"""
-        return "RECOGNIZING..." if self._phase == "processing" else \
-            "REC  --  press hotkey again to stop"
+    def _draw_heading(self) -> None:
+        """标题绘制：listening=REC+[键帽]+提示；processing=RECOGNIZING...
+
+        全 ASCII（2026-08-27 用户定案）。键帽按经典键盘样式：深底、上左
+        亮边、下右暗边（用户提案）。
+        """
+        canvas = self._canvas
+        if canvas is None:
+            return
+        canvas.delete("head")
+        cy = 16
+        if self._phase == "processing":
+            canvas.create_text(_WIDTH // 2, cy, text="RECOGNIZING...",
+                               fill="#cba6f7", font=self._font_b, tags="head")
+            return
+        lay = listen_layout(self._font_n.measure, self._hotkey)
+
+        def _text(x, s, fill="#cdd6f4"):
+            canvas.create_text(x, cy, text=s, anchor="w", fill=fill,
+                               font=self._font_n, tags="head")
+
+        _text(lay["left_x"], "REC", "#a6e3a1")
+        bx, bw_ = lay["mid_box"]
+        bh, by = lay["box_h"], cy - bh // 2
+        canvas.create_rectangle(bx + 2, by + 2, bx + bw_, by + bh,
+                                fill="#0b0b14", outline="", tags="head")   # 右下阴影
+        canvas.create_line(bx, by, bx + bw_, by, fill="#94a3b8",
+                           tags="head")                                    # 上亮边
+        canvas.create_line(bx, by, bx, by + bh, fill="#94a3b8",
+                           tags="head")                                    # 左亮边
+        canvas.create_rectangle(bx + 1, by + 1, bx + bw_ - 1, by + bh - 1,
+                                fill="#334155", outline="#1c2233",
+                                tags="head")                               # 键帽主体
+        canvas.create_text(bx + bw_ / 2, cy, text=self._hotkey or "HOTKEY",
+                           fill="#f5e0dc", font=self._font_b, tags="head")
+        _text(lay["right_x"], "press again to stop", "#8892ad")
+
+    def set_hotkey(self, hotkey: str) -> None:
+        """后挂真实触发键显示（配置可改，组装完成后由平台后端传入）。"""
+        self._hotkey = (hotkey or "").upper()
+        if self._shown.is_set():
+            self._draw_heading()
 
     def update_level(self, rms: float) -> None:
         """音频回调线程喂电平（0.0~1.0，超出会截断）；队列满直接丢（保实时）。
@@ -148,10 +207,13 @@ class WaveformOverlay:
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
         canvas.pack()
-        self._heading_id = canvas.create_text(
-            _WIDTH // 2, 16, text=self._heading(), fill="#cdd6f4",
-            font=("Helvetica", 10, "bold"))
+        import tkinter.font as tkfont
+
+        self._font_n = tkfont.Font(root=root, family="Helvetica", size=9)
+        self._font_b = tkfont.Font(root=root, family="Helvetica", size=9,
+                                   weight="bold")
         self._canvas = canvas
+        self._draw_heading()
         self._draw()
         root.after(30, self._tick)
         try:
@@ -190,10 +252,7 @@ class WaveformOverlay:
                 break
             if cmd in ("listen", "processing") and cmd != self._phase:
                 self._phase = cmd
-                try:
-                    canvas.itemconfigure(self._heading_id, text=self._heading())
-                except Exception:  # noqa: BLE001
-                    pass
+                self._draw_heading()
         if self._phase == "processing":
             # 无输入电平：高斯光斑来回扫（比前版梯形更顺滑）
             self._tick_no += 1

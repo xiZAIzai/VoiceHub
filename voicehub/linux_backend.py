@@ -355,7 +355,8 @@ def _wire_dictation(components, tray) -> None:
     from .notify import DesktopNotifier
 
     notifier = DesktopNotifier()
-    overlay = WaveformOverlay()
+    overlay = WaveformOverlay(
+        hotkey=(components.config.transcription.trigger_key or "").upper())
     recorder = getattr(dictation, "recorder", None)
     if recorder is not None and hasattr(recorder, "set_level_callback"):
         recorder.set_level_callback(overlay.update_level)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import queue
 import threading
 from typing import Optional
@@ -32,20 +33,47 @@ def bar_height(level: float, peak: float, max_px: int = _HEIGHT - 36) -> int:
     return max(3, int(norm * max_px))
 
 
-_FONT_CANDIDATES = (
-    "Noto Sans CJK SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei",
-    "Source Han Sans SC", "Microsoft YaHei", "SimHei",
-    "ukai", "AR PL UMing CN",
-)
+def resolve_cjk_font_file(fc_match=None) -> Optional[str]:
+    """定位一个能画中文的 TTF 文件路径：fc-match :lang=zh 是权威来源。
 
+    背景（2026-08-27 openKylin 实测）：本机唯一中文字库 Droid Sans Fallback
+    不在 tkfont.families() 里（tk 视角 28 个全西文），写死任何族名都出豆腐块/
+    Σ 乱码 —— 故整条路放弃 tk 文字，由 PIL 直读 TTF 渲染成位图上屏。
+    """
+    import shutil
+    import subprocess
 
-def pick_font_family(available) -> Optional[str]:
-    """从已安装字体里挑第一个含中文字形的；纯函数可单测。"""
-    have = set(available)
-    for cand in _FONT_CANDIDATES:
-        if cand in have:
-            return cand
+    fc = fc_match or shutil.which("fc-match")
+    if fc is None:
+        return None
+    try:
+        p = subprocess.run([fc, ":lang=zh", "-f", "%{file}"],
+                           capture_output=True, timeout=5)
+        path = p.stdout.decode(errors="replace").strip()
+        if p.returncode == 0 and path.endswith((".ttf", ".ttc", ".otf")) \
+                and os.path.exists(path):
+            return path
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     return None
+
+
+def heading_image(text: str, font_path: str, fg="#cdd6f4", bg="#1e1e2e",
+                  px: int = 15):
+    """PIL 渲染标题文本 → RGBA 图（透明底交给 canvas 底色）。失败返回 None。"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        font = ImageFont.truetype(font_path, px)
+        box = font.getbbox(text)
+        w, h = box[2] - box[0] + 8, box[3] - box[1] + 10
+        img = Image.new("RGBA", (w, h), bg)
+        ImageDraw.Draw(img).text((4 - box[0], 5 - box[1]), text,
+                                 font=font, fill=fg)
+        return img
+    except Exception:  # noqa: BLE001 - 渲染失败降级为无标题（波形仍是主体）
+        logger.debug("标题位图渲染失败", exc_info=True)
+        return None
 
 
 def sweep_bars(tick_no: int, bars_count: int = _BARS) -> list[float]:
@@ -162,18 +190,10 @@ class WaveformOverlay:
         canvas = tk.Canvas(root, width=_WIDTH, height=_HEIGHT, bg="#1e1e2e",
                            highlightthickness=0)
         canvas.pack()
-        # 乱码修复：不写死字体族——运行时挑系统中文字体，找不到用默认
-        # （数值字号走 Xft 回退，天然支持本地化），否则中文变豆腐块
-        try:
-            import tkinter.font as tkfont
-
-            fam = pick_font_family(tkfont.families(root))
-            self._font = ((fam, 11, "bold") if fam else 12)
-        except Exception:  # noqa: BLE001 - 字体枚举失败用默认
-            self._font = 12
-        self._heading_id = canvas.create_text(
-            _WIDTH // 2, 16, text=self._heading(), fill="#cdd6f4",
-            font=self._font)
+        # 标题走 PIL 位图（tk 字体系统在本机枚举不到中文字体，必乱码）
+        self._heading_photos = {}
+        self._heading_id = None
+        self._set_heading(canvas)
         self._canvas = canvas
         self._draw()
         root.after(30, self._tick)
@@ -186,6 +206,30 @@ class WaveformOverlay:
                 pass
             self._canvas = None
             logger.debug("悬浮框已关闭")
+
+    def _set_heading(self, canvas) -> None:
+        """渲染当前阶段的标题位图并贴上（跨线程只在 tk 线程调用）。"""
+        try:
+            from PIL import ImageTk
+
+            key = self._phase
+            photo = self._heading_photos.get(key)
+            if photo is None:
+                file = resolve_cjk_font_file()
+                if file is None:
+                    return
+                img = heading_image(self._heading(), file)
+                if img is None:
+                    return
+                photo = ImageTk.PhotoImage(img, master=canvas)
+                self._heading_photos[key] = photo  # 防 GC
+            if self._heading_id is None:
+                self._heading_id = canvas.create_image(
+                    _WIDTH // 2, 16, image=photo)
+            else:
+                canvas.itemconfigure(self._heading_id, image=photo)
+        except Exception:  # noqa: BLE001 - 标题失败不影响波形主体
+            logger.debug("标题位图上屏失败", exc_info=True)
 
     def _bind_drag(self, root) -> None:
         """无边框窗口手动拖动（按住任意处移动）。"""
@@ -213,10 +257,7 @@ class WaveformOverlay:
                 break
             if cmd in ("listen", "processing") and cmd != self._phase:
                 self._phase = cmd
-                try:
-                    canvas.itemconfigure(self._heading_id, text=self._heading())
-                except Exception:  # noqa: BLE001 - 标题刷新失败不影响波形
-                    pass
+                self._set_heading(canvas)   # 重贴新阶段标题位图
         if self._phase == "processing":
             # 无输入电平：高斯光斑来回扫（比前版梯形更顺滑）
             self._tick_no += 1

@@ -84,87 +84,38 @@
   - 提交拆分（4 commits）：feat 主控后端 / feat 打包链 / docs 归档 / chore .gitattributes
     （强制 .sh LF，防 autocrlf 破坏 WSL 执行）。
 
-## V4：自建转写内核·云端 ASR（2026-08-25 立项；M11 代码+实机冒烟完成 2026-08-26）
+## V4：自建转写内核·云端 ASR（✅ M11 全部完成 + M12 大半，2026-08-27 收口）
 
-> 原「远期占位」升格立项（用户决策）。催化：闪电说 Linux 版在 openKylin UI 渲染 0 帧
-> 不可用 + glibc 基线过高（调查见 V3 章节），openKylin 语音链路单点依赖被打破。
-> **定案（ADR-9）**：ASR 统一走云（本地不做）；文本直通 orchestrator 不经剪贴板
-> （ADR-4/ADR-5 痛点天然免疫）；双引擎开关与闪电说共存；触发键独立；密钥不进种子 config。
-> 方向全景见 PLAN.md「V4」段；以下为可勾选执行明细。
+> 定案（ADR-9）：ASR 统一走云 / 文本直通 orchestrator 不经剪贴板链路 /
+> 双引擎 config.engine 开关共存 / 触发键独立。过程长文归档：
+> `docs/tasks-archive/V4-M11-M12上-自建转写内核.md`（spike 鉴权攻防、
+> 各实机事故修复、悬浮框 UI 攻坚史全记录）。
 
-- [ ] **M11：最小闭环竖切**（录音 → 云 ASR → 直通路由，目标 2–4 个工作日）
-  - [x] ① provider spike（2026-08-25 完成，协议/端点/鉴权全部查清并实测）：
-    - **火山 ASR 不走 Ark OpenAI 兼容端点**（`/api/v3/audio/transcriptions` 不存在），
-      正确路径 = 豆包语音 openspeech **WebSocket v3 二进制协议**：
-      `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream`（录完统一返回，
-      准确率优先，5s 音频 300–400ms 返回，**M11 首选**）/ `bigmodel_async`（双流优化）
-      / `bigmodel`（双向流式）。
-    - 鉴权（官方文档 docs/6561/1354869 + 1816214）：新版控制台只需
-      `X-Api-Key: <API Key>`（不填 appid）；旧版 = `X-Api-App-Key`(数字 APP ID) +
-      `X-Api-Access-Key`。`X-Api-Resource-Id: volc.seedasr.sauc.duration`
-      （豆包流式 2.0；1.0 是 volc.bigasr.sauc.*）。Ark Agent Plan 另有
-      `/api/v3/plan/sauc/*` 镜像端点（需专属 API Key）。
-    - 二进制帧协议已按文档实现并跑通到鉴权层（4B header + gzip JSON / raw PCM，
-      末包负包 flags=0b0010），探针实现可移植为 asr_client 骨架。
-    - **鉴权定案（2026-08-26 用户补旧版三件套后实测打通 ✅）**：火山豆包 ASR 双鉴权
-      方案并存——旧版控制台 `app_key`（数字 APP ID）+ `access_key`（Access Token）
-      双头（**实测用户凭证可用**，Secret Key 为另一套 REST API 的 HMAC 签名用，
-      WS 鉴权不需要）；新版控制台 `api_key` 单头（X-Api-Key，用户先前 158 位
-      点分 key 在所有网关被判 Invalid，已弃用）。注意 `sauc/bigmodel`（双向基础版）
-      端点对 seedasr 资源返回 not allowed——豆包 2.0 实际只开放 nostream/async
-      两个端点（与闪电说二进制硬编码一致），默认 nostream。真语音验收：服务端
-      duration 对账一致（942ms→942ms），识别管线畅通；旧 key（158 位方舟系 token）
-      结论无效勿再用。
-    - 模型串 `Doubao_Seed_ASR_Streaming_2.0…` 非调用参数（resource id 才是）。
-    - DeepSeek 润色已实测可用（deepseek-v4-flash；httpx 需 trust_env=False 绕 socks 代理）。
-  - [x] ② config 扩展 `transcription` 段 ✅ 2026-08-26：TranscriptionConfig
-    （engine/provider/base_url/resource_id/api_key/language/trigger_key/default_target/
-    sample_rate/VAD 四参数）；Config.load 深度合并 config.local.json + 环境变量
-    `VOICEHUB_ASR_API_KEY` 最高优先；种子 config 已含无密钥模板段。
-  - [x] ③ `voicehub/dictation/` 包 ✅ 2026-08-26：vad.py（纯逻辑，静音/未开口/
-    最长三停条件）+ recorder.py（sounddevice + **arecord 子进程回退**——openKylin 无
-    PortAudio 无 sudo 实测可用，亦免 AppImage 收编 PortAudio）+ engine.py（状态机
-    idle→recording→processing，会话令牌防旧回调污染，no_speech 跳过 ASR 省调用）。
-  - [x] ④ `asr_client.py` ✅ 2026-08-26：火山豆包 WS v3 二进制协议（帧编解码纯函数，
-    自 spike 移植）；连接可注入（假 WS 单测）；瞬时失败重试 1 次，鉴权错不重试；
-    AsrProvider 协议留多厂商适配位。修复探针同源的 read() 缓冲切片 bug（整条消息
-    会被当 n 字节返回，多帧消息尾部丢失——单测抓住）。
-  - [x] ⑤ orchestrator `route_direct(text)` ✅ 2026-08-26：粘滞目标优先 →
-    default_target → 首个 local；local 投递 = 写系统剪贴板（Router.deliver_local +
-    xclip/ctypes 写入器，xclip fork 守护进程坑见 ADR-9 附录）；落库 source=builtin。
-  - [x] ⑥ 触发双通道 ✅ 2026-08-26：托盘菜单「开始听写/停止听写」（动态标签 +
-    LayoutUpdated 广播）+ pynput **Ctrl+Alt+V**（定案，右 Alt 弃用——与闪电说物理同键
-    会互抢；实测 xdotool 合成键可触发）；Windows 侧热键+托盘菜单同步接线。
-  - [x] ⑦ 测试与冒烟 ✅ 2026-08-26：单测 110→154 全绿（dictation 23 + 接线 20 新增）；
-    openKylin 实机冒烟：麦克风采集 ✓（环境底噪 RMS 0.0002）/ VAD 4s 自动停 ✓ /
-    引擎全循环 ✓（ASR 到服务端鉴权层，key 无效止于 401 错误路径，无崩溃）/ 直通路由
-    →剪贴板+DB 落库(10ms) ✓ / 托盘 DBus 点击触发录音 ✓ / 热键触发 ✓。
-  - [x] ⑧ openKylin 实机验收 ✅ 2026-08-26（用户亲测 + 机器复验全过）：
-    用户实测：托盘「开始听写」→ 说话 → 再点停止 → 识别成功；CLI 触发链路复验：
-    麦克风→VAD→ASR→落库全程真实识别出字。验收轮顺带修三个实机问题：
-    ① VAD 状态跨会话残留导致第二次听写秒停（reset() 修复 + 回归测试）；
-    ② 触发无任何可见反馈 → 录音中托盘图标变红 + Title 标注 + 桌面通知横幅
-    （开始/结果/失败三态，M12 悬浮波形窗前置的最小可视化）；
-    ③ Wayland 热键不可靠（pynput X11 抓键仅 XWayland 聚焦时生效）→ 新增第三
-    触发通道 `--dictate` CLI → POST /api/dictate/toggle（供 UKUI 系统快捷键绑定，
-    副产 /api/dictate/status 状态端点）；smoke 清理 pkill 误杀正式实例已修。
-    原文（机器侧验收记录）：""
-
-    旧版凭证打通后，生产版 asr_client 真服务端验证（942ms 音频 duration 对账一致）；
-    桌面 AppImage（42MB，含听写内核）+ 桌面 config.local.json（旧版凭证）实测：
-    引擎启用 ✓ 听写热键 ✓ 合成键触发完整录音循环 ✓；单测 157 全绿、AppImage 冒烟
-    6 PASS。**剩余一步**：用户退出旧托盘实例 → 双击桌面新 AppImage → 托盘「开始
-    听写」（或 Ctrl+Alt+V）说一句话 → Ctrl+V 验证剪贴板文本 + 仪表盘记录可见。
-- [ ] **M12：体验完善**（润色 / 状态可视化 / Wayland 稳触发）
-  - [ ] LLM 润色可选开关（OpenAI 兼容 chat/completions，prompt 可配，原文/润色双落库）。
-  - [ ] 录音状态可视化：托盘 SNI NeedsAttention / tooltip + 仪表盘实时状态。
-  - [ ] UKUI 系统快捷键 CLI：`--dictate` 子命令 + UKUI 设置指引（Wayland 最稳触发）。
-  - [ ] VAD 参数可调（静音阈值 / 最长时长 / 最短时长）。
+- [x] **M11：最小闭环竖切** ✅ 2026-08-26（⑧项全勾，明细与验收见归档）：
+  provider spike → config transcription 段（local.json 深合并+环境变量密钥）
+  → dictation 包（vad/recorder[arecord 回退]/asr_client[WS v3 二进制协议，
+  旧版控制台双头鉴权实测打通]/engine 会话令牌状态机）→ route_direct 直通路由
+  （source=builtin 落库）→ 触发三通道 → 测试/实机/用户三重验收。
+- [x] **M12-① 润色四模式** ✅ 2026-08-26：off/light/structured/custom +
+  DeepSeek 客户端；失败降级原文铁律；raw_text 落专用列仪表盘对照；
+  关 thinking + ASR 大块快发提速（10s 音频后处理 12s→3s 级）。
+- [x] **体验定稿轮** ✅ 2026-08-27（对齐闪电说体感，用户验收「最终版本」）：
+  波形悬浮框终态 = AGC 自适应波形 / 键帽显示真实热键（UKUI 注册绑定优先）/ 
+  可拖动 / 跟随鼠标屏 / 持久线程架构（hide=withdraw 多轮回合零崩溃）/
+  识别期「RECOGNIZING...」扫光陪跑至结果自动收框；剪贴板改 wl-copy 双写
+  （kylin-wlcom 下 xclip 内容原生侧不可见的根治）；快速触发脚本
+  （curl 直打实例，Alt+9 响应 2~4s→65ms）；auto_paste 光标注入两轮攻坚未达
+  标，用户定案暂缓（机制保留，PLAN 后续清单）。
+- [ ] **M12 余项**
+  - [ ] 仪表盘实时听写状态卡（engine.state WS 推送）+ 托盘 tooltip 阶段文案。
+  - [ ] 引擎切换设置页 UI（当前切 builtin 仍需手编 config.local.json）。
+  - [ ] 双引擎并存防抖守卫：builtin 写剪贴板时若闪电说武装中应跳过 settle
+    （现仅告警噪声，无实际重复路由——低成本守卫更稳）。
 - [ ] **M13：工程化收尾 + v0.4.0**
-  - [ ] 打包：sounddevice/PortAudio 收编 AppImage；spec/CI 冒烟扩展（无麦克风 CI 跳过录音项）。
-  - [ ] Windows 侧可用性验证（引擎跨平台：sounddevice + 云 API）。
-  - [ ] README 双引擎章节（engine 开关 / 密钥配置 / 触发键说明）。
-  - [ ] 发 v0.4.0 Release（Windows 双 zip + Linux 双 AppImage）。
+  - [ ] spec 已收编 sounddevice/websocket/tkinter ✅；CI 冒烟补无麦克风跳过项。
+  - [ ] Windows 侧验证（win32_write_text/HotkeyBackend 听写接线已备）。
+  - [ ] README 双引擎章节（engine 开关 / 密钥配置 / 快捷键一键注册说明）。
+  - [ ] 发 v0.4.0 Release。
 
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 

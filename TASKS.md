@@ -114,7 +114,8 @@
 - [ ] **M13：工程化收尾 + v0.4.0**
   - [ ] spec 已收编 sounddevice/websocket/tkinter ✅；CI 冒烟补无麦克风跳过项。
   - [ ] Windows 侧验证（win32_write_text/HotkeyBackend 听写接线已备）。
-  - [ ] README 双引擎章节（engine 开关 / 密钥配置 / 快捷键一键注册说明）。
+  - [x] README 双引擎章节 ✅ 2026-08-27（启用三步 / 系统依赖 / 发行版兼容
+    / 双引擎关系 / 润色配置说明）。
   - [ ] 发 v0.4.0 Release。
 
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。

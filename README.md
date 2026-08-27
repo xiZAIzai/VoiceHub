@@ -79,7 +79,40 @@ Windows 下安装即用；非 Windows 环境自动跳过。
   启动后系统托盘出现 VoiceHub 图标（SNI 协议，菜单「打开仪表盘 / 退出」，左键单击亦可打开）；
   仪表盘默认 <http://127.0.0.1:8765>（8000 易与 Triton 等常见服务冲突，已避开）。
   注意：Wayland 会话下全局热键依赖 XWayland——焦点在 XWayland 应用（含闪电说）时可用，
-  焦点在原生 Wayland 应用时收不到（已知限制，随用随修）。
+  焦点在原生 Wayland 应用时收不到（已知限制；自建内核的系统快捷键通道不受此限）。
+
+### 双引擎：自建听写内核（V4，无需闪电说）
+
+VoiceHub 内置一套独立的听写引擎（`transcription.engine: builtin`），不依赖闪电说客户端：
+**录音（麦克风）→ 云端 ASR（火山豆包·流式语音识别 2.0）→ LLM 润色（可选）→ 剪贴板/多端分发**，
+全程由 VoiceHub 完成，UI 上有波形悬浮框与识别状态动画。
+
+**启用三步：**
+
+1. **切引擎**：仪表盘「设置」→ 转写引擎 → 选「自建内核」→ 保存后重启程序。
+2. **配凭证**：`config.local.json`（与程序同目录，已被 gitignore）写入火山凭证：
+   ```json
+   { "transcription": { "app_key": "<数字APP ID>", "access_key": "<Access Token>" } }
+   ```
+   （新版控制台用户则填 `"api_key": "<API Key>"`；也可用环境变量
+   `VOICEHUB_ASR_APP_KEY` / `VOICEHUB_ASR_ACCESS_KEY` / `VOICEHUB_ASR_API_KEY`。
+   需在火山引擎控制台开通「豆包流式语音识别模型 2.0」。）
+3. **注册快捷键**：仪表盘「设置」→ 听写快捷键 → 一键注册（写入 UKUI 自定义快捷键，
+   任何界面下生效；按一下开始、再按一下结束）。
+
+**使用与反馈**：按热键 → 屏幕底部波形框出现（说话时跳动、可拖动、标题实时显示热键）
+→ 再按热键结束（或说完静音自动结束，参数可配）→ 框切「RECOGNIZING...」扫光
+→ 结果进剪贴板 + 桌面通知 + 仪表盘记录，`Ctrl+V` 粘贴。润色模式
+（关闭/轻整理/结构化整理/自定义，需 DeepSeek key）同在设置页配置。
+
+**Linux 系统依赖**：`xclip`（剪贴板必装）、`alsa-utils`（arecord 录音兜底，基本预装）、
+`wl-clipboard`（Wayland 剪贴板推荐）、`xdotool`（可选）。**发行版兼容**：AppImage
+自包含，openKylin / Ubuntu / Debian 等 x86_64 发行版通用（低 glibc 构建，向下兼容
+新版系统）。
+
+**双引擎关系**：`shandianshuo`（默认）与 `builtin` 共用 Alt+N 目标粘滞与分发链路，
+设置页随时切换；闪电说不可用的平台（如 openKylin 上其 UI 渲染异常）用 builtin 即可
+完全替代。
 
 **方式二：源码运行**
 

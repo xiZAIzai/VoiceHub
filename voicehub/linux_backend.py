@@ -17,6 +17,7 @@ V3/M8 第一版（ADR-7 占位，按 X11 假设先行开发，WSL 可测）：
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import threading
 import time
@@ -68,25 +69,40 @@ def xclip_write_text(text: str) -> bool:
     return p.returncode == 0
 
 
-# 粘贴目标窗口（录音开始时捕获；防悬浮框/焦点漂移导致贴错地方）
+# 粘贴目标窗口（录音开始/停止时捕获；防悬浮框抢焦与中途换位）
 _paste_target: dict = {"wid": None}
 
 
-def capture_paste_target() -> None:
-    """录音开始瞬间记录当前活动窗口 id（此时用户焦点还在目标应用上）。
-
-    悬浮框随后弹出可能抢焦点，粘贴时必须定向回这个窗口（2026-08-26 用户
-    实测「识别文字没出现在光标处」的根因）。取不到则留空，粘贴时回退
-    「当前活动窗口」语义。
-    """
+def _xdotool(*args: str):
+    """执行 xdotool 子命令，失败返回空串。独立成函数便于测试注入。"""
     try:
-        p = subprocess.run(["xdotool", "getactivewindow"],
-                           capture_output=True, timeout=2, encoding="utf-8")
-        wid = p.stdout.strip() if p.returncode == 0 else ""
-        _paste_target["wid"] = wid or None
-        logger.debug("粘贴目标窗口: %s", _paste_target["wid"])
+        p = subprocess.run(["xdotool", *args],
+                           capture_output=True, timeout=3)
+        return p.stdout.decode(errors="replace").strip() if p.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
-        _paste_target["wid"] = None
+        return ""
+
+
+def capture_paste_target() -> None:
+    """记录当前活动窗口 id 为粘贴目标。
+
+    2026-08-27 用户实测补充：录音中用户可能点击别的位置再停止——调用方应在
+    停止时刻再捕获一次，让「最后落点」优先于「开始落点」。守卫：活动窗口属于
+    本进程（= 悬浮框抢到焦点）时不覆盖真实目标，避免把文字贴回自己的悬浮框。
+    """
+    wid = _xdotool("getactivewindow")
+    if not wid:
+        return  # 取不到保持原值
+    pid_out = _xdotool("getwindowpid", wid)
+    try:
+        own = int(pid_out) == os.getpid()
+    except ValueError:
+        own = False
+    if own:
+        logger.debug("活动窗口是本进程悬浮框，保留原目标 %s", _paste_target["wid"])
+        return
+    _paste_target["wid"] = wid
+    logger.debug("粘贴目标窗口: %s", _paste_target["wid"])
 
 
 def xdotool_paste() -> bool:
@@ -100,12 +116,7 @@ def xdotool_paste() -> bool:
     wid = _paste_target.get("wid")
 
     def _send_key(args):
-        try:
-            p = subprocess.run(["xdotool", *args],
-                               capture_output=True, timeout=3)
-            return p.returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            return False
+        return bool(_xdotool(*args))
 
     # 链式尝试（2026-08-27 用户实测 --window 直接发键在 wlcom 下无效）：
     # ① 窗口存在则先激活（XWayland 窗口激活会拉起合成器焦点）再全局发键；
@@ -320,12 +331,28 @@ def _wire_dictation(components, tray) -> None:
     if recorder is not None and hasattr(recorder, "set_level_callback"):
         recorder.set_level_callback(overlay.update_level)
 
+    def _refocus_later(wid: str) -> None:
+        """把焦点还给用户原本的窗口（悬浮框弹出抢焦的补救）。"""
+        def _run():
+            time.sleep(0.4)  # 等 tk 窗口完成映射与抢焦动作后再归还
+            if _xdotool("windowactivate", "--sync", wid):
+                logger.debug("焦点已归还给 %s", wid)
+
+        threading.Thread(target=_run, name="dictation-refocus", daemon=True).start()
+
     def _on_state(state: str) -> None:
         recording = state == "recording"
         tray.set_dictation_state(recording)
         if recording:
-            capture_paste_target()  # 先记焦点窗口，悬浮框随后才弹（防抢焦点贴错）
+            # 先记开始落点，悬浮框随后才弹（会抢焦）——弹后立即把焦点还回去
+            capture_paste_target()
             overlay.show()
+            start_wid = _paste_target.get("wid")
+            if start_wid:
+                _refocus_later(start_wid)
+        elif state == "processing":
+            # 用户可能在录音期间点了新的位置：停止时刻的落点优先
+            capture_paste_target()
         else:
             overlay.hide()
             if state == "idle":

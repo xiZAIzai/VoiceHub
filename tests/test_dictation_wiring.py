@@ -345,3 +345,24 @@ def test_deliver_local_paste_failure_still_ok():
     result = r.route("文本", "desktop", deliver_local=True)
     assert result["ok"] is True
     assert result["error"] == "clipboard only (paste unavailable)"
+
+
+# ---------- 粘贴目标捕获（2026-08-27 焦点抢夺/中途换位修复） ----------
+
+def test_capture_skips_own_process_window(monkeypatch):
+    """悬浮框抢到焦点（活动窗口 pid=本进程）时不得覆盖真实目标。"""
+    import voicehub.linux_backend as lb
+
+    monkeypatch.setattr(lb, "_xdotool", lambda *a: "123456" if a[0] == "getactivewindow" else str(__import__("os").getpid()))
+    lb._paste_target["wid"] = "999"
+    lb.capture_paste_target()
+    assert lb._paste_target["wid"] == "999"  # 保留原目标
+
+
+def test_capture_takes_stop_moment_focus(monkeypatch):
+    import voicehub.linux_backend as lb
+
+    monkeypatch.setattr(lb, "_xdotool", lambda *a: "8888")
+    lb._paste_target["wid"] = "999"
+    lb.capture_paste_target()
+    assert lb._paste_target["wid"] == "8888"  # 新落点生效

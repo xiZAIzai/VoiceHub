@@ -12,6 +12,7 @@ dconf 变化即时生效（无需重启）。
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from typing import Optional
 
@@ -56,17 +57,74 @@ def to_gtk_accel(spec: str) -> str:
 DESKTOP_ID = "voicehub-dictate.desktop"
 
 
+TRIGGER_SCRIPT = "~/.local/share/voicehub/dictate-trigger.sh"
+
+
+def make_trigger_script(port: int, fallback_cmd: str) -> str:
+    """生成毫秒级触发脚本：HTTP 直打运行中实例。
+
+    每次按 Alt+9 完整拉起 AppImage 要挂载镜像+初始化 Python（实测 2~4s），
+    用户体感「再按一下不能立马关闭」；curl 直连 <100ms。实例不在时回退
+    镜像直启。返回脚本绝对路径；失败抛 OSError 由调用方兜底。
+    """
+    import os
+
+    path = os.path.expanduser(TRIGGER_SCRIPT)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("#!/bin/sh\n"
+                "# VoiceHub 听写触发器（注册时生成，勿手改）\n"
+                "curl -s -m 3 -X POST "
+                "http://127.0.0.1:" + str(port) + "/api/dictate/toggle >/dev/null\n"
+                "[ $? -eq 0 ] || exec " + fallback_cmd + " --dictate\n")
+    os.chmod(path, 0o755)
+    return path
+
+
+def _configured_port():
+    """读安装目录 config.json 的仪表盘端口；读不到返回 None。"""
+    import json
+    import sys
+    from pathlib import Path
+
+    if os.environ.get("APPIMAGE"):
+        base = Path(os.environ["APPIMAGE"]).parent
+    elif getattr(sys, "frozen", False):
+        base = Path(sys.executable).parent
+    else:
+        base = Path(__file__).resolve().parents[1]
+    try:
+        cfg = json.loads((base / "config.json").read_text(encoding="utf-8"))
+        port = int(cfg.get("server", {}).get("port", 0))
+        return port or None
+    except (OSError, ValueError):
+        return None
+
+
 def dictation_command() -> str:
-    """听写触发命令（写入 desktop 文件 Exec 行）。"""
+    """听写触发命令（写入 desktop 文件 Exec 行）：优先快速脚本。"""
     import os
     import sys
 
     appimage = os.environ.get("APPIMAGE")  # AppRun 环境下由启动器注入
     if appimage:
-        return f'"{appimage}" --dictate'
+        fallback = '"' + appimage + '"'
+    elif getattr(sys, "frozen", False):
+        fallback = '"' + sys.executable + '"'
+    else:
+        fallback = "'" + sys.executable + "' -m voicehub.main"
+
+    port = _configured_port()
+    if port is not None:
+        try:
+            return make_trigger_script(port, fallback)
+        except OSError as e:
+            logger.warning("触发脚本生成失败，回退镜像直启: %s", e)
+    if appimage:
+        return '"' + appimage + '" --dictate'
     if getattr(sys, "frozen", False):
-        return f'"{sys.executable}" --dictate'
-    return f'"{sys.executable}" -m voicehub.main --dictate'
+        return '"' + sys.executable + '" --dictate'
+    return "'" + sys.executable + "' -m voicehub.main --dictate"
 
 
 def desktop_file_path() -> str:

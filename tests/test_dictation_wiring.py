@@ -362,3 +362,39 @@ def test_capture_takes_stop_moment_focus(monkeypatch):
     lb._paste_target["wid"] = "999"
     lb.capture_paste_target()
     assert lb._paste_target["wid"] == "8888"  # 新落点生效
+
+
+# ---------- 双通道剪贴板 + 快速触发脚本（2026-08-27 两实测修复） ----------
+
+def test_clipboard_writer_uses_dual_channel(monkeypatch):
+    import voicehub.linux_backend as lb
+
+    calls = []
+    monkeypatch.setattr(lb, "xclip_write_text", lambda t: calls.append("xclip") or True)
+    monkeypatch.setattr(lb, "wl_copy_write_text", lambda t: calls.append("wlcopy") or True)
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    assert lb.write_clipboard_text("文本") is True
+    assert calls == ["wlcopy", "xclip"]  # 双写
+
+    calls.clear()
+    monkeypatch.delenv("WAYLAND_DISPLAY")
+    assert lb.write_clipboard_text("文本") is True
+    assert calls == ["xclip"]  # 纯 X 会话单写
+
+
+def test_trigger_script_generation(tmp_path):
+    from voicehub.ukui_shortcut import make_trigger_script
+
+    script = tmp_path / "trigger.sh"
+    import voicehub.ukui_shortcut as m
+    saved = m.TRIGGER_SCRIPT
+    try:
+        m.TRIGGER_SCRIPT = str(script)
+        path = make_trigger_script(8765, '"/tmp/App.Image"')
+        body = open(path).read()
+        assert "8765/api/dictate/toggle" in body
+        assert '/tmp/App.Image" --dictate' in body.replace("\\\"", "\"") or "--dictate" in body
+        import os
+        assert os.access(path, os.X_OK)
+    finally:
+        m.TRIGGER_SCRIPT = saved

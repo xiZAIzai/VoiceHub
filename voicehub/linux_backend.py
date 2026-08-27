@@ -105,6 +105,35 @@ def capture_paste_target() -> None:
     logger.debug("粘贴目标窗口: %s", _paste_target["wid"])
 
 
+def wl_copy_write_text(text: str) -> bool:
+    """wl-copy 写 Wayland 原生剪贴板（跨侧可见性实测优于 xclip，2026-08-27：
+    kylin-wlcom 下 xclip 内容对原生应用不可见——用户「Ctrl+V 不能用」根因）。"""
+    try:
+        p = subprocess.run(["wl-copy"], input=text,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=3, encoding="utf-8")
+        return p.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("wl-copy 不可用")
+        return False
+
+
+def write_clipboard_text(text: str) -> bool:
+    """统一剪贴板写入入口：Wayland 会话下 wl-copy+xclip 双写（各覆盖一侧，
+    至少一路成功即成）；纯 X 会话仅 xclip。"""
+    results = []
+    if os.environ.get("WAYLAND_DISPLAY"):
+        try:
+            import shutil
+
+            if shutil.which("wl-copy"):
+                results.append(wl_copy_write_text(text))
+        except Exception:  # noqa: BLE001 - 探测失败按无 wl-copy
+            pass
+    results.append(xclip_write_text(text))
+    return any(results)
+
+
 def xdotool_paste() -> bool:
     """在目标窗口模拟 Ctrl+V（V4 听写「贴到光标处」，对齐闪电说体验）。
 

@@ -119,9 +119,9 @@ def _clipboard_writer():
 
         return win32_write_text
     if sys.platform.startswith("linux"):
-        from .linux_backend import xclip_write_text
+        from .linux_backend import write_clipboard_text
 
-        return xclip_write_text
+        return write_clipboard_text
     return None
 
 

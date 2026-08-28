@@ -24,6 +24,7 @@ from .discovery import Discovery
 from .hotkey import HotkeyRegistry
 from .orchestrator import Orchestrator
 from .paths import app_dir, default_config_path, resolve_data_path
+from .credentials import CredentialsService
 from .settings import ConfigService
 from .router import Router
 from .state import StickyTarget
@@ -94,12 +95,15 @@ def build_components(config_path: str | Path = "config.json") -> Components:
     orchestrator = Orchestrator(config, sticky, monitor, router)
     # 设置页（M6-③）：config.json 唯一写入方，去抖/超时参数可热应用
     config_service = ConfigService(config_path, monitor=monitor, sticky=sticky)
+    # V4/M12：凭证自助填写（写 gitignored 的 config.local.json，key 永不出服务）
+    credentials = CredentialsService(config_path)
 
     # V4/M11：builtin 听写引擎（录音 → 云 ASR → orchestrator 直通路由）
     dictation = build_dictation(config, orchestrator)
 
     dashboard = Dashboard(config, storage, sticky, discovery, hotkeys,
-                          settings=config_service, dictation=dictation)
+                          settings=config_service, dictation=dictation,
+                          credentials=credentials)
 
     # 注册目标热键：热键回调 → 编排层 select_target
     for key, target in config.targets.items():

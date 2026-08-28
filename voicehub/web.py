@@ -75,6 +75,7 @@ class Dashboard:
         hotkey: Optional[object] = None,
         settings: Optional[ConfigService] = None,
         dictation: Optional[object] = None,
+        credentials: Optional[object] = None,
     ) -> None:
         self._config = config
         self._storage = storage
@@ -83,6 +84,7 @@ class Dashboard:
         self._hotkey = hotkey
         self._settings = settings
         self._dictation = dictation
+        self._credentials = credentials
 
     def state(self) -> dict[str, Any]:
         return collect_state(self._config, self._sticky, self._discovery, self._hotkey)
@@ -155,6 +157,20 @@ class Dashboard:
 
             body = await req.json()
             return reg(binding=str(body.get("binding", "Ctrl+Alt+V")))
+
+        @app.get("/api/credentials")
+        def api_credentials_get():
+            """凭证配置状态（脱敏：仅是否已配置 + 尾 4 位，key 永不出服务）。"""
+            if self._credentials is None:
+                return {"ok": False}
+            return {"ok": True, "credentials": self._credentials.status()}
+
+        @app.post("/api/credentials")
+        async def api_credentials_post(req: Request):
+            """自助填写 API 凭证（写 gitignored 的 config.local.json，重启生效）。"""
+            if self._credentials is None:
+                return {"ok": False, "error": "本实例未启用凭证服务"}
+            return self._credentials.update(await req.json())
 
         @app.delete("/api/dictate/shortcut")
         def api_shortcut_unregister():
@@ -271,6 +287,41 @@ _INDEX_HTML = """<!doctype html>
           润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
           API Key 不在此配置（走 config.local.json 或环境变量 VOICEHUB_POLISH_API_KEY）。
           原文与润色结果双双落库，仪表盘最近转写中可见对照。
+        </p>
+      </div>
+      <!-- V4/M12：API 凭证自助填写（写 config.local.json，gitignore 保护） -->
+      <div class="bg-slate-800 rounded-lg p-4" v-if="cred.supported">
+        <h2 class="text-sm text-slate-400 mb-3">API 凭证（保存到本机 config.local.json，重启程序生效）</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="text-sm">豆包 APP ID
+            <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+            <span class="text-xs" :class="cred.has.transcription_app_key ? 'text-emerald-400' : 'text-slate-500'">
+              {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
+          </label>
+          <label class="text-sm">豆包 Access Token
+            <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+            <span class="text-xs" :class="cred.has.transcription_access_key ? 'text-emerald-400' : 'text-slate-500'">
+              {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
+          </label>
+          <label class="text-sm">DeepSeek Key（润色用）
+            <input type="password" v-model="cred.polish_api_key" placeholder="sk-..."
+                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+            <span class="text-xs" :class="cred.has.polish_api_key ? 'text-emerald-400' : 'text-slate-500'">
+              {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3 mt-3">
+          <button @click="saveCreds" :disabled="cred.busy"
+                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+            保存凭证
+          </button>
+          <span class="text-sm" :class="cred.msgOk ? 'text-emerald-400' : 'text-red-400'">{{ cred.msg }}</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">
+          凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库）；留空的项不改动。
+          新版控制台用户可用「豆包 API Key」——暂时请编辑 config.local.json 的 transcription.api_key 字段。
         </p>
       </div>
       <!-- V4/M12：听写引擎切换 + 录音参数（保存后重启程序生效） -->
@@ -408,6 +459,10 @@ createApp({
     // V4/M11：UKUI 听写系统快捷键一键注册
     shortcut: { supported: false, registered: false, binding: 'Ctrl+Alt+V',
                 msg: '', msgOk: true, busy: false },
+    // V4/M12：API 凭证（脱敏状态回显，保存只发非空项）
+    cred: { supported: false, busy: false, msg: '', msgOk: true,
+            has: {}, transcription_app_key: '', transcription_access_key: '',
+            polish_api_key: '' },
   }; },
   computed: {
     stickyTargetName() {
@@ -444,6 +499,48 @@ createApp({
         }
       }
       if (this.showSettings) this.refreshShortcut();
+      if (this.showSettings) this.refreshCreds();
+    },
+    async refreshCreds() {
+      try {
+        const r = await fetch('/api/credentials');
+        const d = await r.json();
+        this.cred.supported = !!d.ok;
+        const has = {};
+        for (const [domain, fields] of Object.entries(d.credentials || {})) {
+          for (const [f, st] of Object.entries(fields)) {
+            if (st.set) has[domain + '_' + f] = st.tail;
+          }
+        }
+        this.cred.has = has;
+      } catch (e) { this.cred.supported = false; }
+    },
+    async saveCreds() {
+      this.cred.busy = true;
+      try {
+        const payload = { transcription: {}, polish: {} };
+        if (this.cred.transcription_app_key) payload.transcription.app_key = this.cred.transcription_app_key;
+        if (this.cred.transcription_access_key) payload.transcription.access_key = this.cred.transcription_access_key;
+        if (this.cred.polish_api_key) payload.polish.api_key = this.cred.polish_api_key;
+        const r = await fetch('/api/credentials', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        this.cred.msgOk = !!d.ok;
+        this.cred.msg = d.ok ? '已保存：' + (d.updated || []).join(', ') + '（重启程序生效）'
+                             : '保存失败：' + (d.error || '未知错误');
+        if (d.ok) {
+          this.cred.transcription_app_key = this.cred.transcription_access_key = '';
+          this.cred.polish_api_key = '';
+          await this.refreshCreds();
+        }
+      } catch (e) {
+        this.cred.msg = '保存失败：' + e;
+        this.cred.msgOk = false;
+      } finally {
+        this.cred.busy = false;
+      }
     },
     async refreshShortcut() {
       try {

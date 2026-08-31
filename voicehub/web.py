@@ -279,6 +279,8 @@ _INDEX_HTML = """<!doctype html>
       outline: none; transition: border-color .15s ease;
     }
     .vh-input:focus { border-color: var(--accent); }
+    /* 下拉弹出列表跟随主题（否则深色主题下白底浅字看不清） */
+    select.vh-input option { background: var(--bg-soft); color: var(--text); }
     .vh-input.font-mono { font-size: 12.5px; }
     .vh-btn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -383,6 +385,10 @@ _INDEX_HTML = """<!doctype html>
             <input type="number" v-model.number="cfg.voicehub.pending_timeout_sec" class="vh-input">
           </label>
         </div>
+        <p class="vh-hint mt-3">
+          去抖等待：文本写入剪贴板后稳定多久才判定为一次完整输入——太小会把一句话截成多段，太大则出字慢（默认 600ms）。
+          粘滞等待：按 Alt+N 选中目标后的收文窗口期，期内写入剪贴板的文本都会发给该目标——需覆盖一次听写的最长耗时（默认 30s）。
+        </p>
       </div>
       <!-- V4/M12-①：转写润色（多厂商预设 + 四模式） -->
       <div class="vh-card" v-if="cfg.polish">
@@ -429,19 +435,20 @@ _INDEX_HTML = """<!doctype html>
           原文与润色结果双双落库，「最近转写」中可见对照。
         </p>
       </div>
-      <!-- V4/M12：API 凭证自助填写（写 config.local.json，gitignore 保护） -->
-      <div class="vh-card" v-if="cred.supported">
+      <!-- V4/M12：API 凭证自助填写（仅自建内核需要；闪电说引擎下整卡隐藏，已存凭证不受影响） -->
+      <div class="vh-card" v-if="cred.supported && cfg.transcription && cfg.transcription.engine === 'builtin'">
         <h2 class="vh-title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-          API 凭证（保存到本机 config.local.json，重启程序生效）
+          API 凭证（自建内核所需 · 保存到本机 config.local.json，重启程序生效）
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="vh-label">转写 API Key
-            <span class="text-xs vh-faint">豆包新版控制台 / OpenAI 兼容供应商通用</span>
+            <span class="text-xs vh-faint" v-if="cfg.transcription.provider === 'openai_compat'">OpenAI 兼容供应商（硅基流动 / Groq 等）</span>
+            <span class="text-xs vh-faint" v-else>豆包新版控制台（用旧版则填下面两项）</span>
             <input type="password" v-model="cred.transcription_api_key" placeholder="API Key"
                    class="vh-input font-mono">
             <span class="text-xs" :class="cred.has.transcription_api_key ? 'vh-ok' : 'vh-faint'">
-              {{ cred.has.transcription_api_key ? '已配置 ' + cred.has.transcription_api_key : '未配置' }}</span>
+              {{ credTransKeyStatus }}</span>
           </label>
           <label class="vh-label">润色 API Key
             <span class="text-xs vh-faint">DeepSeek / Kimi / GLM 等，按所选厂商</span>
@@ -450,18 +457,20 @@ _INDEX_HTML = """<!doctype html>
             <span class="text-xs" :class="cred.has.polish_api_key ? 'vh-ok' : 'vh-faint'">
               {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
           </label>
-          <label class="vh-label">豆包 APP ID（旧版控制台，选填）
-            <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
-                   class="vh-input font-mono">
-            <span class="text-xs" :class="cred.has.transcription_app_key ? 'vh-ok' : 'vh-faint'">
-              {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
-          </label>
-          <label class="vh-label">豆包 Access Token（旧版控制台，选填）
-            <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
-                   class="vh-input font-mono">
-            <span class="text-xs" :class="cred.has.transcription_access_key ? 'vh-ok' : 'vh-faint'">
-              {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
-          </label>
+          <template v-if="cfg.transcription.provider === 'volcengine_sauc'">
+            <label class="vh-label">豆包 APP ID（旧版控制台，选填）
+              <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
+                     class="vh-input font-mono">
+              <span class="text-xs" :class="cred.has.transcription_app_key ? 'vh-ok' : 'vh-faint'">
+                {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
+            </label>
+            <label class="vh-label">豆包 Access Token（旧版控制台，选填）
+              <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
+                     class="vh-input font-mono">
+              <span class="text-xs" :class="cred.has.transcription_access_key ? 'vh-ok' : 'vh-faint'">
+                {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
+            </label>
+          </template>
         </div>
         <div class="flex items-center gap-3 mt-3">
           <button @click="saveCreds" :disabled="cred.busy" class="vh-btn vh-btn-primary">
@@ -471,7 +480,8 @@ _INDEX_HTML = """<!doctype html>
         </div>
         <p class="vh-hint mt-2">
           凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库），留空的项不改动，回显只显示尾 4 位。
-          豆包鉴权二选一：新版控制台填「转写 API Key」；旧版控制台填 APP ID + Access Token。
+          转写鉴权二选一：新版控制台填「转写 API Key」，或旧版控制台填 APP ID + Access Token，任意一种已配置即可用。
+          切换引擎 / 供应商只是隐藏本卡，已保存的凭证不会被清除。
         </p>
       </div>
       <!-- V4/M12：听写引擎 + 转写供应商 + 录音参数（保存后重启程序生效） -->
@@ -526,6 +536,10 @@ _INDEX_HTML = """<!doctype html>
           未开口放弃 = 按下后一直不说多久自动放弃（不消耗云端调用）。
           「OpenAI 兼容转写」凭「转写 API Key」即可用（硅基流动 / Groq / OpenAI / 本地 Whisper server），
           闪电说不可用的平台（如 openKylin）选「自建内核」。切引擎/供应商需重启；两套引擎共用 Alt+N 目标粘滞。
+        </p>
+        <p class="vh-hint mt-1" v-if="cfg.transcription.engine === 'shandianshuo'">
+          当前引擎为「闪电说」：转写与润色均由闪电说自身完成，无需配置任何 API 凭证；
+          已保存过的凭证仍留在本机 config.local.json，切回自建内核时自动恢复可见。
         </p>
       </div>
       <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->
@@ -716,6 +730,14 @@ createApp({
     themeLabel() {
       const t = THEMES.find(x => x.id === this.theme);
       return t ? t.label : '深色';
+    },
+    // 转写 API Key 状态：新版未配但旧版双头已就绪时明确告知可不填
+    credTransKeyStatus() {
+      if (this.cred.has.transcription_api_key) return '已配置 ' + this.cred.has.transcription_api_key;
+      if (this.cred.has.transcription_app_key && this.cred.has.transcription_access_key) {
+        return '未配置（旧版 APP ID+Token 已就绪，可不填）';
+      }
+      return '未配置';
     },
   },
   methods: {

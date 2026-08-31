@@ -46,6 +46,15 @@ if [ ! -x "$APPIMAGETOOL" ]; then
     chmod +x "$APPIMAGETOOL"
 fi
 
+# type2 runtime（缓存 build/：appimagetool 每次自下载在弱网下会抖，
+# 2026-08-31 实测连续两连失败——缓存 + --runtime-file 显式传入）
+RUNTIME=build/runtime-x86_64
+if [ ! -s "$RUNTIME" ]; then
+    echo "== 下载 type2 runtime =="
+    curl -fL --retry 5 --retry-delay 2 -o "$RUNTIME" \
+        "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+fi
+
 # ---------- AppDir 组装 ----------
 # 参数：$1=PyInstaller 产物目录名（=可执行名）  $2=desktop 文件名  $3=注释  $4=播种config(yes/no)
 make_appdir() {
@@ -106,8 +115,8 @@ make_appdir VoiceHubReceiver voicehubreceiver.desktop "VoiceHub 接收端（收�
 # ---------- 生成 AppImage ----------
 echo "== 生成 AppImage =="
 rm -f dist/VoiceHub-x86_64.AppImage dist/VoiceHubReceiver-x86_64.AppImage
-APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" build/VoiceHub.AppDir dist/VoiceHub-x86_64.AppImage
-APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" build/VoiceHubReceiver.AppDir dist/VoiceHubReceiver-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" --runtime-file "$RUNTIME" build/VoiceHub.AppDir dist/VoiceHub-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" --runtime-file "$RUNTIME" build/VoiceHubReceiver.AppDir dist/VoiceHubReceiver-x86_64.AppImage
 
 ls -lh dist/*.AppImage
 echo "== 完成：dist/VoiceHub-x86_64.AppImage + dist/VoiceHubReceiver-x86_64.AppImage =="

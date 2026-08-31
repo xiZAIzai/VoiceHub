@@ -119,6 +119,11 @@
   - [x] 发 v0.4.0 Release ✅ 2026-08-27（CI 全绿四产物：Windows 双 zip + Linux 双
     AppImage；平台测试三处跨平台问题当场修——触发脚本 UTF-8+LF 强制/双写 which 桩）。
     Release notes 待粘贴（本机无 GitHub 写凭证）。
+- [x] **v0.4.1：凭证自助填写通道发版** ✅ 2026-08-31：CredentialsService +
+  设置页「API 凭证」卡（脱敏 tail-4，key 永不出服务）；__version__ 归位 0.4.1
+  并在仪表盘页脚展示；CI Release 步骤加 generate_release_notes（自动变更日志）。
+- [ ] **官网（GitHub Pages）**：website/ 静态宣传页 + pages 部署 workflow，
+  科技风单页（下载/特性/隐私），README 挂官网链接。
 
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 

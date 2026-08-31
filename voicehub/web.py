@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from .config import Config
 from .settings import ConfigError, ConfigService
 from .storage import Storage
+from . import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -446,6 +447,10 @@ _INDEX_HTML = """<!doctype html>
       <li v-if="!logs.length" class="text-slate-500">暂无记录</li>
     </ul>
   </section>
+
+  <footer class="text-center text-xs text-slate-600 mt-6">
+    VoiceHub v__VOICEHUB_VERSION__ · 单点语音输入，多端分发
+  </footer>
 </div>
 
 <script>
@@ -627,3 +632,6 @@ createApp({
 </body>
 </html>
 """
+
+# 版本号注入：页脚展示与发布版本保持一致（避免 f-string 转义整页 HTML）。
+_INDEX_HTML = _INDEX_HTML.replace("__VOICEHUB_VERSION__", __version__)

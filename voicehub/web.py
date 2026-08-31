@@ -421,101 +421,7 @@ _INDEX_HTML = """<!doctype html>
           粘滞等待：按 Alt+N 选中目标后的收文窗口期，期内写入剪贴板的文本都会发给该目标——需覆盖一次听写的最长耗时（默认 30s）。
         </p>
       </div>
-      <!-- V4/M12-①：转写润色（多厂商预设 + 四模式） -->
-      <div class="vh-card" v-if="cfg.polish">
-        <h2 class="vh-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-          转写润色（保存后重启程序生效）
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="vh-label">润色模式
-            <select v-model="cfg.polish.mode" class="vh-input">
-              <option value="off">关闭（原文直出，零延迟）</option>
-              <option value="light">轻整理（短句输入，输出自然句子）</option>
-              <option value="structured">结构化整理（长口述，喂下游大模型）</option>
-              <option value="custom">自定义 prompt</option>
-            </select>
-          </label>
-          <label class="vh-label">模型厂商
-            <select v-model="cfg.polish.provider" @change="onPolishProvider" class="vh-input">
-              <option value="deepseek">DeepSeek（深度求索）</option>
-              <option value="kimi">Kimi（月之暗面）</option>
-              <option value="zhipu">智谱 GLM</option>
-              <option value="qwen">通义千问（阿里云）</option>
-              <option value="ark">火山方舟（豆包）</option>
-              <option value="openai">OpenAI</option>
-              <option value="custom">自定义 OpenAI 兼容</option>
-            </select>
-          </label>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <label class="vh-label">接口地址 base_url
-            <input v-model="cfg.polish.base_url" class="vh-input font-mono">
-          </label>
-          <label class="vh-label">模型
-            <input v-model="cfg.polish.model" class="vh-input font-mono">
-          </label>
-        </div>
-        <label v-if="cfg.polish.mode === 'custom'" class="vh-label block mt-3">
-          自定义 prompt
-          <textarea v-model="cfg.polish.custom_prompt" rows="5" class="vh-input font-mono"></textarea>
-        </label>
-        <p class="vh-hint mt-3">
-          选厂商自动带出接口地址与默认模型，两项均可手改（火山方舟填 ep- 开头的接入点 ID）；
-          Key 在下方「API 凭证」卡填写。润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
-          原文与润色结果双双落库，「最近转写」中可见对照。
-        </p>
-      </div>
-      <!-- V4/M12：API 凭证自助填写（仅自建内核需要；闪电说引擎下整卡隐藏，已存凭证不受影响） -->
-      <div class="vh-card" v-if="cred.supported && cfg.transcription && cfg.transcription.engine === 'builtin'">
-        <h2 class="vh-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-          API 凭证（自建内核所需 · 保存到本机 config.local.json，重启程序生效）
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="vh-label">转写 API Key
-            <span class="text-xs vh-faint" v-if="cfg.transcription.provider === 'openai_compat'">OpenAI 兼容供应商（硅基流动 / Groq 等）</span>
-            <span class="text-xs vh-faint" v-else>豆包新版控制台（用旧版则填下面两项）</span>
-            <input type="password" v-model="cred.transcription_api_key" placeholder="API Key"
-                   class="vh-input font-mono">
-            <span class="text-xs" :class="cred.has.transcription_api_key ? 'vh-ok' : 'vh-faint'">
-              {{ credTransKeyStatus }}</span>
-          </label>
-          <label class="vh-label">润色 API Key
-            <span class="text-xs vh-faint">DeepSeek / Kimi / GLM 等，按所选厂商</span>
-            <input type="password" v-model="cred.polish_api_key" placeholder="sk-..."
-                   class="vh-input font-mono">
-            <span class="text-xs" :class="cred.has.polish_api_key ? 'vh-ok' : 'vh-faint'">
-              {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
-          </label>
-          <template v-if="cfg.transcription.provider === 'volcengine_sauc'">
-            <label class="vh-label">豆包 APP ID（旧版控制台，选填）
-              <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
-                     class="vh-input font-mono">
-              <span class="text-xs" :class="cred.has.transcription_app_key ? 'vh-ok' : 'vh-faint'">
-                {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
-            </label>
-            <label class="vh-label">豆包 Access Token（旧版控制台，选填）
-              <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
-                     class="vh-input font-mono">
-              <span class="text-xs" :class="cred.has.transcription_access_key ? 'vh-ok' : 'vh-faint'">
-                {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
-            </label>
-          </template>
-        </div>
-        <div class="flex items-center gap-3 mt-3">
-          <button @click="saveCreds" :disabled="cred.busy" class="vh-btn vh-btn-primary">
-            保存凭证
-          </button>
-          <span class="text-sm" :class="cred.msgOk ? 'vh-ok' : 'vh-err'">{{ cred.msg }}</span>
-        </div>
-        <p class="vh-hint mt-2">
-          凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库），留空的项不改动，回显只显示尾 4 位。
-          转写鉴权二选一：新版控制台填「转写 API Key」，或旧版控制台填 APP ID + Access Token，任意一种已配置即可用。
-          切换引擎 / 供应商只是隐藏本卡，已保存的凭证不会被清除。
-        </p>
-      </div>
-      <!-- V4/M12：听写引擎 + 转写供应商 + 录音参数（保存后重启程序生效） -->
+      <!-- V4/M12：听写引擎 + 转写供应商 + 录音参数（保存后重启程序生效；润色/凭证卡随引擎联动显隐） -->
       <div class="vh-card" v-if="cfg.transcription">
         <h2 class="vh-title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
@@ -569,8 +475,103 @@ _INDEX_HTML = """<!doctype html>
           闪电说不可用的平台（如 openKylin）选「自建内核」。切引擎/供应商需重启；两套引擎共用 Alt+N 目标粘滞。
         </p>
         <p class="vh-hint mt-1" v-if="cfg.transcription.engine === 'shandianshuo'">
-          当前引擎为「闪电说」：转写与润色均由闪电说自身完成，无需配置任何 API 凭证；
-          已保存过的凭证仍留在本机 config.local.json，切回自建内核时自动恢复可见。
+          当前引擎为「闪电说」：转写与润色均由闪电说自身完成，无需配置任何 API 凭证，
+          「转写润色」与「API 凭证」两卡已隐藏；已保存过的配置仍留在本机，切回自建内核时自动恢复可见。
+        </p>
+      </div>
+      <!-- V4/M12-①：转写润色（多厂商预设 + 四模式；仅自建内核需要，闪电说自带润色） -->
+      <div class="vh-card" v-if="cfg.polish && cfg.transcription && cfg.transcription.engine === 'builtin'">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          转写润色（保存后重启程序生效）
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="vh-label">润色模式
+            <select v-model="cfg.polish.mode" class="vh-input">
+              <option value="off">关闭（原文直出，零延迟）</option>
+              <option value="light">轻整理（短句输入，输出自然句子）</option>
+              <option value="structured">结构化整理（长口述，喂下游大模型）</option>
+              <option value="custom">自定义 prompt</option>
+            </select>
+          </label>
+          <label class="vh-label">模型厂商
+            <select v-model="cfg.polish.provider" @change="onPolishProvider" class="vh-input">
+              <option value="deepseek">DeepSeek（深度求索）</option>
+              <option value="kimi">Kimi（月之暗面）</option>
+              <option value="zhipu">智谱 GLM</option>
+              <option value="qwen">通义千问（阿里云）</option>
+              <option value="ark">火山方舟（豆包）</option>
+              <option value="openai">OpenAI</option>
+              <option value="custom">自定义 OpenAI 兼容</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <label class="vh-label">接口地址 base_url
+            <input v-model="cfg.polish.base_url" class="vh-input font-mono">
+          </label>
+          <label class="vh-label">模型
+            <input v-model="cfg.polish.model" class="vh-input font-mono">
+          </label>
+        </div>
+        <label v-if="cfg.polish.mode === 'custom'" class="vh-label block mt-3">
+          自定义 prompt
+          <textarea v-model="cfg.polish.custom_prompt" rows="5" class="vh-input font-mono"></textarea>
+        </label>
+        <p class="vh-hint mt-3">
+          润色仅作用于自建内核链路（「闪电说」自带润色处理，选它时本卡隐藏，配置仍保留）。
+          选厂商自动带出接口地址与默认模型，两项均可手改（火山方舟填 ep- 开头的接入点 ID）；
+          Key 在下方「API 凭证」卡填写。润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
+          原文与润色结果双双落库，「最近转写」中可见对照。
+        </p>
+      </div>
+      <!-- V4/M12：API 凭证自助填写（仅自建内核需要；闪电说引擎下整卡隐藏，已存凭证不受影响） -->
+      <div class="vh-card" v-if="cred.supported && cfg.transcription && cfg.transcription.engine === 'builtin'">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          API 凭证（自建内核所需 · 保存到本机 config.local.json，重启程序生效）
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="vh-label">转写 API Key
+            <span class="text-xs vh-faint" v-if="cfg.transcription.provider === 'openai_compat'">OpenAI 兼容供应商（硅基流动 / Groq 等）</span>
+            <span class="text-xs vh-faint" v-else>豆包新版控制台（用旧版则填下面两项）</span>
+            <input type="password" v-model="cred.transcription_api_key" placeholder="API Key"
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.transcription_api_key ? 'vh-ok' : 'vh-faint'">
+              {{ credTransKeyStatus }}</span>
+          </label>
+          <label class="vh-label">润色 API Key
+            <span class="text-xs vh-faint">DeepSeek / Kimi / GLM 等，按所选厂商</span>
+            <input type="password" v-model="cred.polish_api_key" placeholder="sk-..."
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.polish_api_key ? 'vh-ok' : 'vh-faint'">
+              {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
+          </label>
+          <template v-if="cfg.transcription.provider === 'volcengine_sauc'">
+            <label class="vh-label">豆包 APP ID（旧版控制台，选填）
+              <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
+                     class="vh-input font-mono">
+              <span class="text-xs" :class="cred.has.transcription_app_key ? 'vh-ok' : 'vh-faint'">
+                {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
+            </label>
+            <label class="vh-label">豆包 Access Token（旧版控制台，选填）
+              <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
+                     class="vh-input font-mono">
+              <span class="text-xs" :class="cred.has.transcription_access_key ? 'vh-ok' : 'vh-faint'">
+                {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
+            </label>
+          </template>
+        </div>
+        <div class="flex items-center gap-3 mt-3">
+          <button @click="saveCreds" :disabled="cred.busy" class="vh-btn vh-btn-primary">
+            保存凭证
+          </button>
+          <span class="text-sm" :class="cred.msgOk ? 'vh-ok' : 'vh-err'">{{ cred.msg }}</span>
+        </div>
+        <p class="vh-hint mt-2">
+          凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库），留空的项不改动，回显只显示尾 4 位。
+          转写鉴权二选一：新版控制台填「转写 API Key」，或旧版控制台填 APP ID + Access Token，任意一种已配置即可用。
+          切换引擎 / 供应商只是隐藏本卡，已保存的凭证不会被清除。
         </p>
       </div>
       <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->

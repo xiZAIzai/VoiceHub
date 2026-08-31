@@ -305,7 +305,7 @@
 <header class="hero wrap" id="top">
   <span class="badge"><span class="dot"></span>v0.4.1 · 自建转写内核 + 凭证自助配置</span>
   <h1>单点语音输入，<br><span class="grad">多端分发</span></h1>
-  <p class="lead">按下热键说一句话，AI 润色后的文本即刻进入剪贴板——或自动飞到你的笔记本、平板光标处。开源免费，密钥只存本机，托盘常驻即装即用。</p>
+  <p class="lead">语音转写有很多产品做得很好，VoiceHub 解决的是「最后一步」：说出来的话，一键出现在你手边的任何一台设备——台式机、笔记本、平板。开源免费，密钥只存本机，托盘常驻即装即用。</p>
   <div class="cta-row">
     <a class="btn btn-primary" href="#download">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -344,14 +344,14 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <div class="sec-kicker">Features</div>
-      <h2>为「说出来」而生的一整套链路</h2>
-      <p>从按下热键到文本落地，每一步都为速度与可靠设计——不需要打开任何窗口。</p>
+      <h2>转写不是壁垒，分发才是</h2>
+      <p>转写交给成熟引擎完成；VoiceHub 专注把结果送到你手边的每一台设备——从按下热键到文字落地，全程不需要打开任何窗口。</p>
     </div>
     <div class="grid">
       <div class="card reveal">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg></div>
-        <h3>自建转写内核</h3>
-        <p>火山豆包 ASR 直连，WebSocket 流式分片上传，边录边传。10 秒语音约 3 秒出稿，最长支持 5 分钟连续口述。</p>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
+        <h3>多端分发<span style="display:inline-block;font-size:11px;font-weight:600;color:#67e8f9;border:1px solid rgba(34,211,238,.45);border-radius:999px;padding:1px 9px;margin-left:8px;vertical-align:2px">核心创新</span></h3>
+        <p>UDP 心跳自动发现局域网设备，零配置组网；台式机直写剪贴板，笔记本 / 平板（含 Termux）接收端收文即自动粘贴。一次口述，处处落地。</p>
       </div>
       <div class="card reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
@@ -359,14 +359,14 @@
         <p>检测到「闪电说」在线时自动交给它，不可用（如 openKylin 渲染异常）时无缝回退内置引擎。设置页一键切换，无需改配置文件。</p>
       </div>
       <div class="card reveal">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l2-7 4 14 3-10 2 5h6"/></svg></div>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
         <h3>AI 润色四模式</h3>
-        <p>关闭 / 精炼 / 结构化 / 自定义，DeepSeek 驱动，转写原文与润色结果双双落库可对照。思考模式关闭优化，润色仅增加约 1 秒。</p>
+        <p>关闭 / 精炼 / 结构化 / 自定义，DeepSeek 等多家模型厂商预设可选，转写原文与润色结果双双落库可对照。</p>
       </div>
       <div class="card reveal">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
-        <h3>多端分发</h3>
-        <p>UDP 心跳自动发现局域网设备，HTTP 推送 + 接收端自动粘贴。台式机、笔记本、平板（Termux）一套热键全接管。</p>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg></div>
+        <h3>自建转写内核（兜底）</h3>
+        <p>火山豆包 ASR 流式直连或任意 OpenAI 兼容转写端点（硅基流动 / Groq / 本地 Whisper），闪电说不可用的平台照常可用。</p>
       </div>
       <div class="card reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-8 4 16 2-6 2 4h2"/></svg></div>
@@ -393,7 +393,7 @@
       <div class="step reveal"><span class="num">STEP 1</span><h3>按热键开口说</h3><p>全局热键触发录音，悬浮波形窗实时反馈；再按一次或静默超时自动结束。</p></div>
       <div class="step reveal"><span class="num">STEP 2</span><h3>云端流式转写</h3><p>音频分片流式上传火山豆包 ASR，边录边传，说完几乎无需等待。</p></div>
       <div class="step reveal"><span class="num">STEP 3</span><h3>AI 润色（可选）</h3><p>DeepSeek 按所选模式整理口语：精炼、结构化模板或你的自定义提示词。</p></div>
-      <div class="step reveal"><span class="num">STEP 4</span><h3>剪贴板 / 多端粘贴</h3><p>文本写入剪贴板，或按目标热键直接推送到笔记本、平板的光标处自动粘贴。</p></div>
+      <div class="step reveal"><span class="num">STEP 4</span><h3>一键分发到多端</h3><p>结果直进台式机剪贴板；按目标热键推送，笔记本、平板接收端自动粘贴——全程无需手动中转，这是一般转写工具给不了的。</p></div>
     </div>
   </div>
 </section>

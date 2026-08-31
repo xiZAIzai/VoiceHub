@@ -4,6 +4,8 @@
 VoiceHub 守护进程按热键把文本一键注入台式机 / 笔记本 / 平板的光标位置，全量转写持久化 SQLite，
 为后续向量化与个人 Agent 记忆中枢预留接口。
 
+> 🌐 **官网**（特性总览 / 一键下载）：<https://xizaizai.github.io/VoiceHub/>
+
 ## 架构
 
 ```

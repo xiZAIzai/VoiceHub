@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceHub — 单点语音输入，多端分发</title>
+<meta name="description" content="按下热键说一句话，AI 润色后的文本即刻进入剪贴板，或推送到笔记本、平板的光标处。开源、本地密钥、托盘常驻。Windows / Linux 双平台。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1020'/%3E%3Crect x='13' y='6' width='6' height='13' rx='3' fill='%236366f1'/%3E%3Cpath d='M9 15a7 7 0 0 0 14 0' stroke='%2322d3ee' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M16 22v4' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #070b16;
+    --bg-soft: #0b1120;
+    --card: rgba(255, 255, 255, .035);
+    --card-border: rgba(255, 255, 255, .08);
+    --text: #e6eaf2;
+    --muted: #8b94a8;
+    --accent: #6366f1;
+    --accent-2: #22d3ee;
+    --grad: linear-gradient(120deg, #818cf8, #22d3ee);
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  /* 背景网格 + 光晕 */
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: -2;
+    background:
+      radial-gradient(600px 400px at 15% -5%, rgba(99, 102, 241, .18), transparent 60%),
+      radial-gradient(700px 500px at 90% 10%, rgba(34, 211, 238, .10), transparent 60%),
+      radial-gradient(500px 400px at 50% 100%, rgba(99, 102, 241, .08), transparent 60%);
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ===== 导航 ===== */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: rgba(7, 11, 22, .72);
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+  }
+  .nav-inner { display: flex; align-items: center; gap: 28px; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: .3px; }
+  .logo svg { display: block; }
+  .nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .nav-gh {
+    margin-left: 8px; display: flex; align-items: center; gap: 6px;
+    font-size: 14px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--card-border); background: var(--card);
+  }
+  .nav-gh:hover { border-color: rgba(129, 140, 248, .5); }
+  @media (max-width: 720px) { .nav-links { display: none; } .nav-gh { margin-left: auto; } }
+
+  /* ===== Hero ===== */
+  .hero { padding: 84px 0 40px; text-align: center; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; color: #a5b4fc;
+    border: 1px solid rgba(129, 140, 248, .35);
+    background: rgba(99, 102, 241, .10);
+    padding: 6px 16px; border-radius: 999px;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+  h1 {
+    margin: 26px 0 18px;
+    font-size: clamp(38px, 7vw, 64px);
+    line-height: 1.15; font-weight: 800; letter-spacing: .5px;
+  }
+  h1 .grad {
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .hero p.lead {
+    max-width: 640px; margin: 0 auto;
+    color: var(--muted); font-size: clamp(15px, 2.2vw, 18px);
+  }
+  .cta-row { display: flex; gap: 14px; justify-content: center; margin-top: 34px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 28px; border-radius: 12px; font-size: 15.5px; font-weight: 600;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .btn-primary {
+    background: linear-gradient(120deg, #6366f1, #0ea5e9);
+    box-shadow: 0 8px 30px rgba(79, 70, 229, .35);
+    color: #fff;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 38px rgba(79, 70, 229, .5); }
+  .btn-ghost { border: 1px solid var(--card-border); background: var(--card); color: var(--text); }
+  .btn-ghost:hover { border-color: rgba(129, 140, 248, .5); transform: translateY(-2px); }
+  .hero-meta { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+  .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ===== 悬浮窗模型（产品示意）===== */
+  .overlay-mock {
+    margin: 56px auto 0; max-width: 560px;
+    border: 1px solid rgba(129, 140, 248, .25);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(17, 24, 46, .92), rgba(11, 17, 32, .95));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .5), 0 0 60px rgba(99, 102, 241, .12);
+    overflow: hidden;
+  }
+  .overlay-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, .06);
+    font-size: 12px; color: var(--muted);
+  }
+  .overlay-bar .rec { width: 9px; height: 9px; border-radius: 50%; background: #f87171; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .overlay-body { display: flex; align-items: flex-end; justify-content: center; gap: 5px; height: 120px; padding: 18px 24px 8px; }
+  .bar {
+    width: 7px; border-radius: 4px;
+    background: var(--grad);
+    animation: wave 1.15s ease-in-out infinite;
+    transform-origin: bottom;
+  }
+  @keyframes wave {
+    0%, 100% { transform: scaleY(.25); opacity: .55; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+  .overlay-foot {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 12px 20px 16px; font-size: 13px; color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .keycap {
+    display: inline-block; padding: 3px 10px; font-size: 12.5px; color: #c7d2fe;
+    border: 1px solid rgba(199, 210, 254, .35); border-bottom-width: 2.5px;
+    border-radius: 7px; background: rgba(99, 102, 241, .12);
+  }
+
+  /* ===== 通用 section ===== */
+  section { padding: 84px 0; }
+  .sec-head { text-align: center; margin-bottom: 48px; }
+  .sec-kicker {
+    font-size: 13px; font-weight: 600; letter-spacing: 2px;
+    color: var(--accent-2); text-transform: uppercase;
+  }
+  h2 { font-size: clamp(26px, 4vw, 36px); font-weight: 750; margin: 10px 0 12px; letter-spacing: .3px; }
+  .sec-head p { color: var(--muted); max-width: 620px; margin: 0 auto; font-size: 15.5px; }
+
+  /* ===== 特性网格 ===== */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    border: 1px solid var(--card-border); border-radius: var(--radius);
+    background: var(--card); padding: 26px 24px;
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(129, 140, 248, .4);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .35);
+  }
+  .icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(99, 102, 241, .22), rgba(34, 211, 238, .14));
+    border: 1px solid rgba(129, 140, 248, .3);
+    margin-bottom: 16px;
+  }
+  .card h3 { font-size: 17px; margin-bottom: 8px; font-weight: 700; }
+  .card p { color: var(--muted); font-size: 14px; }
+
+  /* ===== 工作原理 ===== */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; position: relative; }
+  @media (max-width: 860px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .flow { grid-template-columns: 1fr; } }
+  .step {
+    position: relative; text-align: left;
+    border: 1px solid var(--card-border); border-radius: var(--radius);
+    background: var(--card); padding: 22px 20px;
+  }
+  .step .num {
+    font-size: 13px; font-weight: 700; color: var(--accent-2);
+    letter-spacing: 1px; margin-bottom: 8px; display: block;
+  }
+  .step h3 { font-size: 16px; margin-bottom: 6px; }
+  .step p { color: var(--muted); font-size: 13.5px; }
+  .step::after {
+    content: "→"; position: absolute; right: -13px; top: 50%;
+    transform: translateY(-50%); color: rgba(129, 140, 248, .6);
+    font-size: 18px; z-index: 1;
+  }
+  .step:last-child::after { content: none; }
+  @media (max-width: 860px) { .step::after { content: none; } }
+
+  /* ===== 双引擎 ===== */
+  .engines { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .engines { grid-template-columns: 1fr; } }
+  .engine-card {
+    border: 1px solid var(--card-border); border-radius: var(--radius);
+    background: var(--card); padding: 28px 26px;
+  }
+  .engine-card.primary { border-color: rgba(129, 140, 248, .4); background: linear-gradient(180deg, rgba(99, 102, 241, .10), rgba(255,255,255,.02)); }
+  .engine-tag {
+    display: inline-block; font-size: 12px; font-weight: 600;
+    padding: 3px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .engine-card.primary .engine-tag { background: rgba(99, 102, 241, .2); color: #a5b4fc; border: 1px solid rgba(129, 140, 248, .4); }
+  .engine-card.alt .engine-tag { background: rgba(34, 211, 238, .12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, .3); }
+  .engine-card h3 { font-size: 19px; margin-bottom: 10px; }
+  .engine-card p { color: var(--muted); font-size: 14.5px; }
+  .engine-note {
+    margin-top: 18px; text-align: center; color: var(--muted); font-size: 13.5px;
+    border: 1px dashed rgba(255, 255, 255, .12); border-radius: 12px; padding: 14px 18px;
+  }
+  .engine-note b { color: #a5b4fc; font-weight: 600; }
+
+  /* ===== 下载 ===== */
+  .downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .downloads { grid-template-columns: 1fr; } }
+  .dl-card {
+    border: 1px solid var(--card-border); border-radius: var(--radius);
+    background: var(--card); padding: 30px 28px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .dl-head { display: flex; align-items: center; justify-content: space-between; }
+  .dl-head h3 { font-size: 20px; }
+  .dl-head svg { opacity: .9; }
+  .dl-list { display: flex; flex-direction: column; gap: 10px; }
+  .dl-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border: 1px solid var(--card-border); border-radius: 10px;
+    padding: 12px 16px; font-size: 14px;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .dl-item:hover { border-color: rgba(129, 140, 248, .5); background: rgba(99, 102, 241, .07); }
+  .dl-item .file { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; color: #c7d2fe; word-break: break-all; }
+  .dl-item .role { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .dl-card .note { color: var(--muted); font-size: 13px; }
+  .all-releases { text-align: center; margin-top: 26px; font-size: 14.5px; }
+  .all-releases a { color: #818cf8; border-bottom: 1px dashed rgba(129, 140, 248, .5); padding-bottom: 2px; }
+  .all-releases a:hover { color: #a5b4fc; }
+
+  /* ===== 隐私 ===== */
+  .privacy {
+    border: 1px solid rgba(52, 211, 153, .25); border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(16, 185, 129, .07), rgba(255, 255, 255, .02));
+    padding: 36px 34px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px;
+  }
+  @media (max-width: 820px) { .privacy { grid-template-columns: 1fr; padding: 28px 24px; } }
+  .p-item .p-title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15.5px; margin-bottom: 8px; }
+  .p-item p { color: var(--muted); font-size: 14px; }
+  .p-item code {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+    background: rgba(255, 255, 255, .07); padding: 2px 7px; border-radius: 6px; color: #a7f3d0;
+  }
+
+  /* ===== 页脚 ===== */
+  footer { border-top: 1px solid rgba(255, 255, 255, .06); padding: 36px 0 44px; margin-top: 40px; }
+  .foot-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13.5px; }
+  .foot-inner a { color: #818cf8; }
+  .foot-inner a:hover { color: #a5b4fc; }
+
+  /* 入场动画 */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-inner">
+    <a class="logo" href="#top">
+      <svg width="26" height="26" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0b1020" stroke="rgba(129,140,248,.4)"/><rect x="13" y="6" width="6" height="13" rx="3" fill="#6366f1"/><path d="M9 15a7 7 0 0 0 14 0" stroke="#22d3ee" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M16 22v4" stroke="#22d3ee" stroke-width="2.4" stroke-linecap="round"/></svg>
+      VoiceHub
+    </a>
+    <div class="nav-links">
+      <a href="#features">特性</a>
+      <a href="#how">工作原理</a>
+      <a href="#engines">双引擎</a>
+      <a href="#download">下载</a>
+      <a href="#privacy">隐私</a>
+    </div>
+    <a class="nav-gh" href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero wrap" id="top">
+  <span class="badge"><span class="dot"></span>v0.4.1 · 自建转写内核 + 凭证自助配置</span>
+  <h1>单点语音输入，<br><span class="grad">多端分发</span></h1>
+  <p class="lead">按下热键说一句话，AI 润色后的文本即刻进入剪贴板——或自动飞到你的笔记本、平板光标处。开源免费，密钥只存本机，托盘常驻即装即用。</p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="#download">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      免费下载
+    </a>
+    <a class="btn btn-ghost" href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">查看源码</a>
+  </div>
+  <div class="hero-meta">
+    <span>🖥️ Windows · Linux</span>
+    <span>⚖️ MIT 开源</span>
+    <span>🔑 密钥本地存储</span>
+    <span>🚫 无需注册账号</span>
+  </div>
+
+  <div class="overlay-mock" aria-hidden="true">
+    <div class="overlay-bar"><span class="rec"></span>VoiceHub 听写悬浮窗</div>
+    <div class="overlay-body">
+      <div class="bar" style="height:34px; animation-delay:0s"></div>
+      <div class="bar" style="height:58px; animation-delay:.12s"></div>
+      <div class="bar" style="height:82px; animation-delay:.24s"></div>
+      <div class="bar" style="height:64px; animation-delay:.06s"></div>
+      <div class="bar" style="height:96px; animation-delay:.3s"></div>
+      <div class="bar" style="height:52px; animation-delay:.18s"></div>
+      <div class="bar" style="height:78px; animation-delay:.42s"></div>
+      <div class="bar" style="height:44px; animation-delay:.09s"></div>
+      <div class="bar" style="height:66px; animation-delay:.36s"></div>
+      <div class="bar" style="height:88px; animation-delay:.21s"></div>
+      <div class="bar" style="height:56px; animation-delay:.03s"></div>
+      <div class="bar" style="height:38px; animation-delay:.27s"></div>
+    </div>
+    <div class="overlay-foot">REC · press <span class="keycap">Alt</span><span style="color:#475569">+</span><span class="keycap">9</span> again to stop</div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Features</div>
+      <h2>为「说出来」而生的一整套链路</h2>
+      <p>从按下热键到文本落地，每一步都为速度与可靠设计——不需要打开任何窗口。</p>
+    </div>
+    <div class="grid">
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg></div>
+        <h3>自建转写内核</h3>
+        <p>火山豆包 ASR 直连，WebSocket 流式分片上传，边录边传。10 秒语音约 3 秒出稿，最长支持 5 分钟连续口述。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <h3>双引擎自动分流</h3>
+        <p>检测到「闪电说」在线时自动交给它，不可用（如 openKylin 渲染异常）时无缝回退内置引擎。设置页一键切换，无需改配置文件。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l2-7 4 14 3-10 2 5h6"/></svg></div>
+        <h3>AI 润色四模式</h3>
+        <p>关闭 / 精炼 / 结构化 / 自定义，DeepSeek 驱动，转写原文与润色结果双双落库可对照。思考模式关闭优化，润色仅增加约 1 秒。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
+        <h3>多端分发</h3>
+        <p>UDP 心跳自动发现局域网设备，HTTP 推送 + 接收端自动粘贴。台式机、笔记本、平板（Termux）一套热键全接管。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-8 4 16 2-6 2 4h2"/></svg></div>
+        <h3>波形悬浮窗</h3>
+        <p>AGC 自增益实时波形，录音 / 识别双阶段动画，可拖拽、光标跟随。键帽样式直显当前真实热键，再按一次即停。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></div>
+        <h3>Web 仪表盘</h3>
+        <p>浏览器打开 127.0.0.1:8765：热键一键注册、录音参数、VAD 静默停止、引擎切换、API 凭证自助填写、历史记录全可视化。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background: var(--bg-soft); border-block: 1px solid rgba(255,255,255,.05);">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">How it works</div>
+      <h2>四步，从开口到落地</h2>
+      <p>全程无需打开窗口，后台守护进程静默完成。</p>
+    </div>
+    <div class="flow">
+      <div class="step reveal"><span class="num">STEP 1</span><h3>按热键开口说</h3><p>全局热键触发录音，悬浮波形窗实时反馈；再按一次或静默超时自动结束。</p></div>
+      <div class="step reveal"><span class="num">STEP 2</span><h3>云端流式转写</h3><p>音频分片流式上传火山豆包 ASR，边录边传，说完几乎无需等待。</p></div>
+      <div class="step reveal"><span class="num">STEP 3</span><h3>AI 润色（可选）</h3><p>DeepSeek 按所选模式整理口语：精炼、结构化模板或你的自定义提示词。</p></div>
+      <div class="step reveal"><span class="num">STEP 4</span><h3>剪贴板 / 多端粘贴</h3><p>文本写入剪贴板，或按目标热键直接推送到笔记本、平板的光标处自动粘贴。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="engines">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Dual Engine</div>
+      <h2>双引擎，互为备份</h2>
+      <p>内置内核保证开箱即用，闪电说在线时自动让位——总有一条路能到达。</p>
+    </div>
+    <div class="engines">
+      <div class="engine-card primary reveal">
+        <span class="engine-tag">内置引擎 · Builtin</span>
+        <h3>火山豆包 ASR 直连</h3>
+        <p>VoiceHub 自建的转写内核：WebSocket v3 流式协议直连豆包大模型 ASR，不依赖任何第三方客户端。只需在设置页填入自己的 API 凭证（支持自助填写，脱敏保存），任何平台都能用——包括闪电说无法运行的 openKylin 等 Linux 发行版。</p>
+      </div>
+      <div class="engine-card alt reveal">
+        <span class="engine-tag">兼容引擎 · 闪电说</span>
+        <h3>闪电说（已装即用）</h3>
+        <p>已安装「闪电说」？VoiceHub 会监听它的剪贴板输出并接管分发路由，你原有的使用习惯完全不变。引擎检测失败或手动选择时自动切回内置内核，转写永不中断。</p>
+      </div>
+    </div>
+    <div class="engine-note reveal">分流逻辑：<b>配置指定谁就用谁</b>；未指定且检测到闪电说在线 → 闪电说优先，否则内置引擎兜底。</div>
+  </div>
+</section>
+
+<section id="download" style="background: var(--bg-soft); border-block: 1px solid rgba(255,255,255,.05);">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Download</div>
+      <h2>下载 VoiceHub</h2>
+      <p>免安装、绿色便携：配置与数据始终在程序旁边，拷走即迁移。以下链接始终指向最新 Release。</p>
+    </div>
+    <div class="downloads">
+      <div class="dl-card reveal">
+        <div class="dl-head">
+          <h3>🪟 Windows x64</h3>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="#8b94a8"><path d="M3 5.5 10.5 4.4v7.1H3V5.5zm0 13 7.5 1.1v-7H3v5.9zM11.5 4.2 21 3v8.5h-9.5V4.2zm0 15.6L21 21v-8.5h-9.5v7.3z"/></svg>
+        </div>
+        <div class="dl-list">
+          <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHub-windows-x64.zip">
+            <span class="file">VoiceHub-windows-x64.zip</span><span class="role">主控 · 台式机</span>
+          </a>
+          <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHubReceiver-windows-x64.zip">
+            <span class="file">VoiceHubReceiver-windows-x64.zip</span><span class="role">接收端 · 笔记本</span>
+          </a>
+        </div>
+        <p class="note">解压即用。主控双击 VoiceHub.exe 托盘常驻，浏览器访问 127.0.0.1:8765 打开仪表盘配置热键与凭证。</p>
+      </div>
+      <div class="dl-card reveal">
+        <div class="dl-head">
+          <h3>🐧 Linux x86_64</h3>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="#8b94a8"><path d="M12.5 2c-.7 0-1.3.4-1.7 1-.4.7-.6 1.5-.6 2.4 0 .3-.2.6-.4.9-.5.8-1.2 1.7-1.7 2.6-.5.9-.9 1.9-1 3-.1.7-.5 1.3-.9 1.9-.4.7-.7 1.4-.6 2.2 0 .3.2.5.3.8-.4.3-.8.7-.9 1.2-.1.5 0 1 .3 1.4.3.4.7.7 1.2.9.9.5 1.9.7 2.9.7.7 0 1.4-.2 2.1-.4.9-.3 1.9-.4 2.8-.2.6.1 1.2.3 1.8.2.5 0 1-.2 1.3-.6.2-.3.3-.7.3-1 .6-.2 1.1-.5 1.5-.9.3-.4.5-.9.4-1.4-.1-.6-.5-1-1-1.3.2-.5.3-1 .2-1.5-.1-1.1-.7-2-1.4-2.9-.6-.8-1.2-1.6-1.5-2.5-.3-.8-.4-1.6-.5-2.4-.1-.8-.2-1.6-.5-2.3-.3-.6-.7-1.1-1.3-1.3-.2-.1-.5-.1-.7-.2-.2-.9-.5-1.8-1.1-2.3-.3-.3-.7-.5-1.1-.5z"/></svg>
+        </div>
+        <div class="dl-list">
+          <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHub-x86_64.AppImage">
+            <span class="file">VoiceHub-x86_64.AppImage</span><span class="role">主控 · 台式机</span>
+          </a>
+          <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHubReceiver-x86_64.AppImage">
+            <span class="file">VoiceHubReceiver-x86_64.AppImage</span><span class="role">接收端 · 第二台设备</span>
+          </a>
+        </div>
+        <p class="note">chmod +x 后直接运行。openKylin / Ubuntu / Debian 等发行版通用（低 glibc 构建）。建议安装 wl-clipboard（Wayland 剪贴板）。</p>
+      </div>
+    </div>
+    <p class="all-releases reveal">需要历史版本或校验信息？<a href="https://github.com/xiZAIzai/VoiceHub/releases" target="_blank" rel="noopener">前往 GitHub Releases →</a></p>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Privacy</div>
+      <h2>密钥与数据，都留在你手里</h2>
+      <p>VoiceHub 是纯本地守护进程：没有账号体系，没有遥测，没有云中转。</p>
+    </div>
+    <div class="privacy reveal">
+      <div class="p-item">
+        <div class="p-title">🔐 凭证只存本机</div>
+        <p>API Key 仅写入本机 <code>config.local.json</code>（权限 600，已被 gitignore），永不上传、永不入库；也可用环境变量注入。</p>
+      </div>
+      <div class="p-item">
+        <div class="p-title">🙈 仪表盘脱敏展示</div>
+        <p>设置页只显示密钥尾 4 位，接口永远不回传完整 Key，旁人瞄一眼屏幕也不怕。</p>
+      </div>
+      <div class="p-item">
+        <div class="p-title">💾 历史本地落库</div>
+        <p>全部转写记录存本机 SQLite，随时可查、随时可迁；音频仅用于当次转写，不留存。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span>VoiceHub · 单点语音输入，多端分发</span>
+    <span>
+      <a href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">GitHub</a>
+      &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; © 2026 xizaizai
+    </span>
+  </div>
+</footer>
+
+<script>
+  // 入场动画：进入视口即浮现
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach((el, i) => {
+    el.style.transitionDelay = `${(i % 3) * 60}ms`;
+    io.observe(el);
+  });
+</script>
+</body>
+</html>

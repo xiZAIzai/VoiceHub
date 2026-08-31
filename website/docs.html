@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使用文档 — VoiceHub</title>
+<meta name="description" content="VoiceHub 使用文档：快速上手、双引擎与转写供应商配置、AI 润色模型厂商选择、多端分发、本地接口参考与常见问题。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1020'/%3E%3Crect x='13' y='6' width='6' height='13' rx='3' fill='%236366f1'/%3E%3Cpath d='M9 15a7 7 0 0 0 14 0' stroke='%2322d3ee' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M16 22v4' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #070b16; --bg-soft: #0b1120;
+    --card: rgba(255,255,255,.035); --card-border: rgba(255,255,255,.08);
+    --text: #e6eaf2; --muted: #8b94a8; --faint: #626c82;
+    --accent: #818cf8; --accent-2: #22d3ee;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    line-height: 1.75; -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -2;
+    background:
+      radial-gradient(600px 400px at 12% -5%, rgba(99,102,241,.15), transparent 60%),
+      radial-gradient(700px 500px at 92% 8%, rgba(34,211,238,.08), transparent 60%);
+  }
+  a { color: inherit; text-decoration: none; }
+  code, pre { font-family: ui-monospace, "SF Mono", Consolas, "JetBrains Mono", monospace; }
+  code { background: rgba(255,255,255,.07); padding: 2px 7px; border-radius: 6px; font-size: 13px; color: #a5b4fc; }
+  pre {
+    background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 12px;
+    padding: 16px 18px; font-size: 13px; overflow-x: auto; margin: 14px 0; line-height: 1.7;
+  }
+  pre code { background: none; padding: 0; color: #c7d2fe; }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: rgba(7,11,22,.72); border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .nav-inner { max-width: 1140px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 26px; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+  .nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links .active { color: var(--accent); }
+
+  .layout { max-width: 1140px; margin: 0 auto; padding: 40px 24px 80px; display: grid; grid-template-columns: 220px 1fr; gap: 44px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } aside { position: static; height: auto; } }
+  aside { position: sticky; top: 84px; align-self: start; font-size: 13.5px; }
+  aside .cap { color: var(--faint); font-size: 12px; letter-spacing: 2px; margin-bottom: 10px; }
+  aside a { display: block; padding: 5px 10px; border-radius: 8px; color: var(--muted); border-left: 2px solid transparent; }
+  aside a:hover { color: var(--text); background: var(--card); }
+  aside a.top { color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+
+  main { min-width: 0; }
+  section { margin-bottom: 52px; }
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: .3px; margin-bottom: 8px; }
+  h1 + p { color: var(--muted); margin-bottom: 28px; }
+  h2 { font-size: 22px; font-weight: 750; margin-bottom: 14px; padding-top: 6px; }
+  h2 .sec-no { color: var(--accent-2); font-size: 14px; margin-right: 8px; font-weight: 700; }
+  h3 { font-size: 16px; margin: 20px 0 8px; color: #c7d2fe; }
+  main p { color: #b7bfd0; font-size: 14.5px; margin-bottom: 10px; }
+  main ul, main ol { color: #b7bfd0; font-size: 14.5px; padding-left: 22px; margin-bottom: 12px; }
+  main li { margin-bottom: 6px; }
+  main strong { color: var(--text); }
+  .tip {
+    border: 1px solid rgba(34,211,238,.3); background: rgba(34,211,238,.06);
+    border-radius: 12px; padding: 12px 16px; font-size: 13.5px; color: #b7bfd0; margin: 14px 0;
+  }
+  .tip b { color: #67e8f9; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 14px 0; }
+  th { text-align: left; color: var(--faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.05); color: #b7bfd0; vertical-align: top; }
+  td:first-child { color: var(--text); white-space: nowrap; }
+  .badge { display: inline-block; font-size: 11px; color: #67e8f9; border: 1px solid rgba(34,211,238,.4); border-radius: 999px; padding: 0 8px; margin-left: 6px; vertical-align: 2px; }
+  footer { border-top: 1px solid rgba(255,255,255,.06); padding: 30px 24px 40px; text-align: center; color: var(--muted); font-size: 13px; }
+  footer a { color: #818cf8; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="logo" href="index.html">
+      <svg width="26" height="26" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0b1020" stroke="rgba(129,140,248,.4)"/><rect x="13" y="6" width="6" height="13" rx="3" fill="#6366f1"/><path d="M9 15a7 7 0 0 0 14 0" stroke="#22d3ee" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M16 22v4" stroke="#22d3ee" stroke-width="2.4" stroke-linecap="round"/></svg>
+      VoiceHub
+    </a>
+    <div class="nav-links">
+      <a href="index.html#features">特性</a>
+      <a href="index.html#how">工作原理</a>
+      <a href="index.html#download">下载</a>
+      <a href="docs.html" class="active">文档</a>
+      <a href="index.html#privacy">隐私</a>
+      <a href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+  <aside>
+    <div class="cap">DOCUMENTATION</div>
+    <a class="top" href="index.html">← 返回官网</a>
+    <a href="#quickstart">快速上手</a>
+    <a href="#concepts">核心概念</a>
+    <a href="#engine">转写引擎与供应商</a>
+    <a href="#polish">AI 润色与模型厂商</a>
+    <a href="#dispatch">多端分发</a>
+    <a href="#hotkey">听写快捷键</a>
+    <a href="#vad">录音参数与 VAD</a>
+    <a href="#api">本地接口参考</a>
+    <a href="#privacy">数据与隐私</a>
+    <a href="#faq">常见问题</a>
+  </aside>
+
+  <main>
+    <h1>使用文档</h1>
+    <p>从安装到多端分发，以及给自动化脚本用的本地接口。所有配置都有默认值——多数人只需要走完「快速上手」。</p>
+
+    <section id="quickstart">
+      <h2><span class="sec-no">01</span>快速上手</h2>
+      <p><strong>主控机</strong>（你说话的这台）三步：</p>
+      <ol>
+        <li>下载并运行主控端（Windows 双击 <code>VoiceHub.exe</code>；Linux <code>chmod +x</code> 后运行 AppImage）——配置与数据自动生成在程序旁边；</li>
+        <li>浏览器打开 <code>http://127.0.0.1:8765</code>，进「设置」：选转写引擎、填 API 凭证、（可选）配润色；</li>
+        <li>注册听写快捷键，按下说一句，再按一下——文字已在剪贴板，Ctrl+V 即用。</li>
+      </ol>
+      <p><strong>接收端</strong>（员工机）：部署 VoiceHubReceiver（Windows zip / Linux AppImage），保持和主控机在同一局域网即可被自动发现。想自定义设备名，编辑它旁边的 <code>config.json</code>。</p>
+      <div class="tip"><b>提示</b>：主控机不需要是最强的电脑——它只负责调度。你的笔记本、迷你主机都可以是指挥台。</div>
+    </section>
+
+    <section id="concepts">
+      <h2><span class="sec-no">02</span>核心概念</h2>
+      <table>
+        <tr><th>概念</th><th>说明</th></tr>
+        <tr><td>主控机</td><td>运行 VoiceHub daemon 的机器：录音、转写、润色、分发都从这里出发，并直写本机剪贴板。</td></tr>
+        <tr><td>接收端（员工）</td><td>运行 VoiceHubReceiver 的机器。每 4 秒向局域网 UDP 广播报到（端口 9898），收到推送即写剪贴板并自动粘贴。</td></tr>
+        <tr><td>目标热键</td><td>Alt+1/2/3/4 选定分发目标（在设置页绑定）。选定后进入粘滞状态，听写结果自动发往该目标。</td></tr>
+        <tr><td>双引擎</td><td>「闪电说」在线时自动优先（剪贴板监听链路）；不可用时无缝回退自建内核。设置页可手动指定。</td></tr>
+        <tr><td>AI 润色</td><td>可选的 LLM 后处理：把口语整理成自然句子或结构化文本。仅在自建内核链路生效，失败自动降级原文直出。</td></tr>
+      </table>
+    </section>
+
+    <section id="engine">
+      <h2><span class="sec-no">03</span>转写引擎与供应商</h2>
+      <p>设置页「听写引擎与录音参数」卡：先选引擎，再选供应商（供应商仅在自建内核下出现），凭证卡会跟随联动，只显示需要填的字段。</p>
+      <h3>引擎：闪电说 vs 自建内核</h3>
+      <ul>
+        <li><strong>闪电说</strong>（默认）：已安装即用，VoiceHub 监听其剪贴板输出并接管分发，你原有习惯完全不变；</li>
+        <li><strong>自建内核</strong>：VoiceHub 自己录音 → 云端转写 → 直通剪贴板/分发。不依赖任何第三方客户端，且支持 AI 润色。</li>
+      </ul>
+      <h3>自建内核的转写供应商</h3>
+      <table>
+        <tr><th>供应商</th><th>接口地址（自动带出）</th><th>模型</th><th>需要的凭证</th></tr>
+        <tr><td>火山豆包（默认）</td><td><code>wss://openspeech.bytedance.com/...</code></td><td>豆包流式 2.0</td><td>新版控制台「转写 API Key」，或旧版 APP ID + Access Token（二选一）</td></tr>
+        <tr><td>OpenAI 兼容转写</td><td>见下</td><td>见下</td><td>对应的「转写 API Key」</td></tr>
+      </table>
+      <p>「OpenAI 兼容转写」是一套通用协议，常见接入：</p>
+      <table>
+        <tr><th>服务商</th><th>base_url</th><th>模型名示例</th></tr>
+        <tr><td>硅基流动</td><td><code>https://api.siliconflow.cn/v1</code></td><td><code>FunAudioLLM/SenseVoiceSmall</code>（默认）</td></tr>
+        <tr><td>Groq</td><td><code>https://api.groq.com/openai/v1</code></td><td><code>whisper-large-v3</code></td></tr>
+        <tr><td>OpenAI</td><td><code>https://api.openai.com/v1</code></td><td><code>whisper-1</code></td></tr>
+        <tr><td>本地 Whisper server</td><td><code>http://127.0.0.1:9000/v1</code></td><td>依你的部署而定</td></tr>
+      </table>
+      <p>选供应商自动带出端点与模型，均可手改；换供应商忘改端点也不怕——检测到旧端点会自动回落默认值。</p>
+    </section>
+
+    <section id="polish">
+      <h2><span class="sec-no">04</span>AI 润色与模型厂商<span class="badge">可选</span></h2>
+      <p>润色把口述原稿整理成「能直接用」的文字。四种模式：<strong>关闭</strong>（原文直出，零延迟）/ <strong>轻整理</strong>（口语短句 → 自然表达）/ <strong>结构化整理</strong>（长口述 → 主题分块的下游喂料）/ <strong>自定义</strong>（填你自己的 prompt）。</p>
+      <p>润色走 OpenAI 兼容协议，厂商下拉即选即用（自动带出端点与默认模型，可手改）：</p>
+      <table>
+        <tr><th>厂商</th><th>base_url</th><th>默认模型</th><th>Key 申请</th></tr>
+        <tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-v4-flash</code></td><td><a href="https://platform.deepseek.com" target="_blank" rel="noopener" style="color:#818cf8">platform.deepseek.com</a></td></tr>
+        <tr><td>Kimi（月之暗面）</td><td><code>https://api.moonshot.cn/v1</code></td><td><code>kimi-k2-0905-preview</code></td><td><a href="https://platform.moonshot.cn" target="_blank" rel="noopener" style="color:#818cf8">platform.moonshot.cn</a></td></tr>
+        <tr><td>智谱 GLM</td><td><code>https://open.bigmodel.cn/api/paas/v4</code></td><td><code>glm-4.7</code></td><td><a href="https://open.bigmodel.cn" target="_blank" rel="noopener" style="color:#818cf8">open.bigmodel.cn</a></td></tr>
+        <tr><td>通义千问</td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td><code>qwen3-max</code></td><td><a href="https://bailian.console.aliyun.com" target="_blank" rel="noopener" style="color:#818cf8">阿里云百炼</a></td></tr>
+        <tr><td>火山方舟</td><td><code>https://ark.cn-beijing.volces.com/api/v3</code></td><td><code>doubao-seed-1-6-250615</code></td><td><a href="https://console.volcengine.com/ark" target="_blank" rel="noopener" style="color:#818cf8">火山方舟控制台</a>（模型名也可填 <code>ep-</code> 接入点）</td></tr>
+        <tr><td>OpenAI</td><td><code>https://api.openai.com/v1</code></td><td><code>gpt-4o-mini</code></td><td><a href="https://platform.openai.com" target="_blank" rel="noopener" style="color:#818cf8">platform.openai.com</a></td></tr>
+        <tr><td>自定义</td><td>任意 OpenAI 兼容端点（含本地 Ollama / LM Studio）</td><td>—</td><td>—</td></tr>
+      </table>
+      <p>润色 Key 在「API 凭证」卡填写；原文与润色结果双双落库，「最近转写」里可对照。</p>
+    </section>
+
+    <section id="dispatch">
+      <h2><span class="sec-no">05</span>多端分发</h2>
+      <ol>
+        <li>在员工机上运行接收端；主控机设置页「目标设备」里核对其热键（默认 Alt+1/2/3/4）与名称；</li>
+        <li>同一局域网内自动发现（UDP 9898），无需手动填 IP；特殊网络下可在目标里写死端点 <code>http://IP:5050/paste</code>；</li>
+        <li>使用：按 <code>Alt+N</code> 选定目标（粘滞 30 秒，可在设置页调），然后正常听写——结果自动发给该目标并自动粘贴。</li>
+      </ol>
+      <div class="tip"><b>员工命名</b>：把接收端叫「员工一号」「员工二号」只是习惯——任何名字都可以，热键和名字都在接收端旁边的 config.json 里改。</div>
+    </section>
+
+    <section id="hotkey">
+      <h2><span class="sec-no">06</span>听写快捷键</h2>
+      <ul>
+        <li><strong>Linux（UKUI / openKylin）</strong>：设置页「一键注册」写入系统自定义快捷键（等效控制中心手动添加），任何界面下生效；系统重启后若失效，回设置页重注册一次即可；</li>
+        <li><strong>Windows</strong>：内置全局热键（默认 <code>Ctrl+Alt+V</code>，可在配置中改）；</li>
+        <li>监听中屏幕有波形悬浮窗：再按一次快捷键或说完静音即结束；悬浮窗可拖动，键帽直显当前真实热键。</li>
+      </ul>
+    </section>
+
+    <section id="vad">
+      <h2><span class="sec-no">07</span>录音参数与 VAD</h2>
+      <table>
+        <tr><th>参数</th><th>默认</th><th>说明</th></tr>
+        <tr><td>静音自动结束</td><td>0（关闭）</td><td>说完连续静音多久自动送识别；0 = 仅手动按快捷键结束（推荐，和闪电说一致）</td></tr>
+        <tr><td>未开口放弃等待</td><td>10000 ms</td><td>按下后一直不说话多久自动放弃（不消耗云端调用）</td></tr>
+        <tr><td>单段最长录音</td><td>300 s</td><td>单次口述硬上限，支持长口述</td></tr>
+        <tr><td>采样率</td><td>16000 Hz</td><td>高级设置中可调</td></tr>
+      </table>
+    </section>
+
+    <section id="api">
+      <h2><span class="sec-no">08</span>本地接口参考</h2>
+      <p>主控机与接收端都提供本地 HTTP 接口，方便脚本与自动化接入。</p>
+      <h3>主控机仪表盘（默认 127.0.0.1:8765，仅本机访问）</h3>
+      <pre><code>POST /api/dictate/toggle        # 开始/结束一次听写（系统快捷键内部就是调它）
+GET  /api/state                 # 粘滞目标 / 在线设备 / 目标列表（另有 WS /ws 每 2s 推送）
+GET  /api/logs?limit=20         # 最近转写记录（含原文与润色对照）
+GET  /api/config                # 读配置
+PUT  /api/config                # 写配置（JSON，非法字段返回 400）
+GET  /api/credentials           # 凭证状态（只回脱敏尾 4 位）
+POST /api/credentials           # 写凭证（JSON，只更新提交的非空字段）
+GET/POST/DELETE /api/dictate/shortcut   # UKUI 系统快捷键查询/注册/移除</code></pre>
+      <p>触发脚本示例（任意机器上远程让主控机开始/停止听写）：</p>
+      <pre><code>curl -s -X POST http://127.0.0.1:8765/api/dictate/toggle</code></pre>
+      <h3>接收端（默认 0.0.0.0:5050）</h3>
+      <pre><code>POST /paste      # body: {"text": "..."} （JSON，UTF-8）→ 写剪贴板并自动粘贴
+GET  /health     # 存活探测</code></pre>
+      <p>示例：把一句话直接发给某台员工机：</p>
+      <pre><code>curl -s -X POST http://192.168.1.23:5050/paste \
+     -H "Content-Type: application/json; charset=utf-8" \
+     -d '{"text": "会议改到下午三点"}'</code></pre>
+      <p>UDP 心跳：接收端每 4 秒向 <code>255.255.255.255:9898</code> 广播 <code>{"svc":"voicehub","name":"...","port":5050}</code>，主控机据此自动发现。</p>
+    </section>
+
+    <section id="privacy">
+      <h2><span class="sec-no">09</span>数据与隐私</h2>
+      <ul>
+        <li>API Key 只写入程序旁的 <code>config.local.json</code>（权限 600，已被 gitignore），永不上传、不入库；也可用环境变量 <code>VOICEHUB_ASR_API_KEY</code> / <code>VOICEHUB_ASR_APP_KEY</code> / <code>VOICEHUB_ASR_ACCESS_KEY</code> / <code>VOICEHUB_POLISH_API_KEY</code> 注入；</li>
+        <li>仪表盘凭证卡只显示尾 4 位，接口永不回传完整 Key；</li>
+        <li>转写历史存本机 <code>voicehub.db</code>（SQLite），程序旁 <code>logs/</code> 为运行日志；音频仅用于当次转写，不留存；</li>
+        <li>拷走程序目录即完成迁移（便携式设计）。</li>
+      </ul>
+    </section>
+
+    <section id="faq">
+      <h2><span class="sec-no">10</span>常见问题</h2>
+      <h3>按了听写快捷键没反应？</h3>
+      <p>Linux/UKUI：回设置页点一次「一键注册」（系统重启后快捷键枚举会刷新）；或先用托盘菜单「开始听写」验证链路本身是否正常。</p>
+      <h3>识别结果没有自动粘贴到光标处？</h3>
+      <p>默认只进剪贴板（Ctrl+V 上屏）——Wayland 下向其他窗口注入按键不可靠，这是有意的稳定取舍。分发到接收端的文本会由接收端自动粘贴。</p>
+      <h3>转写报 401 / 无结果？</h3>
+      <p>检查凭证卡状态与供应商是否匹配（火山新版 Key 与旧版双头别混用）；确认对应云端服务已开通。OpenAI 兼容供应商注意 base_url 是否带了 <code>/v1</code>。</p>
+      <h3>润色没生效？</h3>
+      <p>三查：模式是否还停在「关闭」；润色 Key 是否已填；引擎是否为自建内核（闪电说链路有它自己的润色）。润色失败时自动降级原文直出，不会挡住上屏。</p>
+      <h3>8765 端口被占用？</h3>
+      <p>设置页「高级设置」改仪表盘端口，重启后用新地址访问。接收端 5050 / 心跳 9898 同理可在配置中调整。</p>
+      <h3>接收端没被自动发现？</h3>
+      <p>确认与主控机同一网段、路由器未隔离 UDP 广播；仍不行就在目标里写死 <code>http://IP:5050/paste</code>。</p>
+      <h3>支持哪些系统？</h3>
+      <p>主控/接收端：Windows x64 与 Linux x86_64（AppImage 自包含，openKylin / Ubuntu / Debian 等通用）。Wayland 建议安装 <code>wl-clipboard</code>。</p>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <a href="index.html">VoiceHub</a> · 使用文档 · 单点语音输入，多端分发 ·
+  <a href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+</body>
+</html>

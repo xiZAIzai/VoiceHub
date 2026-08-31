@@ -122,8 +122,29 @@
 - [x] **v0.4.1：凭证自助填写通道发版** ✅ 2026-08-31：CredentialsService +
   设置页「API 凭证」卡（脱敏 tail-4，key 永不出服务）；__version__ 归位 0.4.1
   并在仪表盘页脚展示；CI Release 步骤加 generate_release_notes（自动变更日志）。
-- [ ] **官网（GitHub Pages）**：website/ 静态宣传页 + pages 部署 workflow，
-  科技风单页（下载/特性/隐私），README 挂官网链接。
+- [x] **v0.4.0 Release 四产物** ✅ 2026-08-31（CI 全绿，Release 由 bot 自动发布）。
+- [ ] **官网（GitHub Pages）**：website/ 静态宣传页 + pages 部署 workflow ✅ 已推送
+  （科技风单页：下载/特性/双引擎/隐私/闪电说致谢），**待用户 Settings→Pages 开启
+  「GitHub Actions」源后重跑部署**；README 挂官网链接 + 致谢章节 ✅。
+
+### 多厂商开放轮（2026-08-31，用户定案：一次做全不分二期）
+
+- [x] **ASR 多厂商适配器** ✅：`AsrProvider` 协议下新增 `OpenAICompatAsrClient`
+  （POST /audio/transcriptions，一套协议覆盖硅基流动 SenseVoice / Groq / OpenAI /
+  本地 Whisper；pcm_to_wav 内存转码不落盘，httpx trust_env=False 对齐润色）；
+  `build_asr_provider` 工厂（volcengine_sauc 默认 / openai_compat，
+  wss 端点忘改时回落硅基流动防呆）；TranscriptionConfig 增 model 字段。
+- [x] **润色多厂商预设** ✅：OpenAI 兼容协议本就通用，补上 UI 预设下拉
+  （DeepSeek/Kimi/智谱/通义/火山方舟/OpenAI/自定义，选厂自动带出端点+默认模型可手改，
+  老配置按 base_url 反查回显）。
+- [x] **高级设置卡** ✅（默认收起）：仪表盘端口、采样率、火山端点/资源 ID
+  （值本就可配，清理「死配置」感知）。
+- [x] **仪表盘美化** ✅：深/浅/护眼三主题（CSS 语义变量 + localStorage 持久化 +
+  data-theme 切换）、卡片/输入框/按钮全语义化配色、卡片图标、Logo 渐变、
+  保存栏悬浮；科技风对齐官网观感，Tailwind 仅保留布局职责。
+- [x] 凭证卡扩容 ✅：转写 API Key（豆包新版/OpenAI 兼容通用）+ 润色 Key
+  （按所选厂商）+ 旧版双头（选填），全部 UI 化。
+- [x] 测试 ✅ 212 passed（新增 OpenAI 兼容客户端 6 项 + provider 工厂 4 项）。
 
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 

@@ -504,3 +504,47 @@ def test_config_service_accepts_engine_switch(tmp_path):
     svc.update({"transcription": {"engine": "builtin"}})
     assert json.loads(path.read_text(encoding="utf-8"))[
         "transcription"]["engine"] == "builtin"
+
+
+# ---------- 多厂商 ASR provider 工厂（v0.5） ----------
+
+def _tc(**kw):
+    """构造 transcription 配置（走真实 from_dict，保证字段语义一致）。"""
+    from voicehub.config import TranscriptionConfig
+
+    return TranscriptionConfig.from_dict(kw)
+
+
+def test_factory_default_is_volcengine():
+    from voicehub.dictation.asr_client import VolcengineSaucClient
+    from voicehub.main import build_asr_provider
+
+    tc = _tc(api_key="k")
+    assert type(build_asr_provider(tc)) is VolcengineSaucClient
+
+
+def test_factory_openai_compat_maps_endpoint_and_model():
+    from voicehub.dictation.asr_client import OpenAICompatAsrClient
+    from voicehub.main import build_asr_provider
+
+    tc = _tc(provider="openai_compat", api_key="k",
+             base_url="https://api.groq.com/openai/v1", model="whisper-large-v3")
+    client = build_asr_provider(tc)
+    assert type(client) is OpenAICompatAsrClient
+    assert client._base_url == "https://api.groq.com/openai/v1"
+    assert client._model == "whisper-large-v3"
+
+
+def test_factory_openai_compat_falls_back_from_wss_endpoint():
+    """只切 provider 忘改端点：wss 火山端点回落到硅基流动默认（防呆）。"""
+    from voicehub.main import build_asr_provider
+
+    tc = _tc(provider="openai_compat", api_key="k", base_url="wss://openspeech.bytedance.com/x")
+    client = build_asr_provider(tc)
+    assert client._base_url == "https://api.siliconflow.cn/v1"
+
+
+def test_transcription_model_field_roundtrip():
+    tc = _tc(model="FunAudioLLM/SenseVoiceSmall")
+    assert tc.model == "FunAudioLLM/SenseVoiceSmall"
+    assert _tc().model == "whisper-1"  # 默认值兜底

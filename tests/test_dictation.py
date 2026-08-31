@@ -592,3 +592,67 @@ def test_processing_bars_not_in_agc_domain():
     assert max(tops) >= int(0.9 * top)   # 光斑中心接近满幅
     assert min(tops) < int(0.15 * top)   # 边缘只剩余晖（层次分明）
     assert len(set(tops)) > 5            # 不是一排等高红柱
+
+
+# ---------- OpenAI 兼容转写客户端（v0.5 多厂商） ----------
+
+class TestOpenAICompatAsr:
+    def _client(self, post=None, language="auto"):
+        from voicehub.dictation.asr_client import OpenAICompatAsrClient
+
+        return OpenAICompatAsrClient(
+            api_key="sk-test", base_url="https://api.example.com/v1/",
+            model="SenseVoice", language=language, post=post)
+
+    def test_pcm_to_wav_header(self):
+        from voicehub.dictation.asr_client import pcm_to_wav
+
+        wav = pcm_to_wav(b"\x00\x00" * 160, sample_rate=16000)
+        assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE"
+        # 44B 标准 WAV 头 + 原始 PCM
+        assert len(wav) == 44 + 320
+
+    def test_no_api_key_raises_at_construction(self):
+        from voicehub.dictation.asr_client import AsrError, OpenAICompatAsrClient
+
+        with pytest.raises(AsrError):
+            OpenAICompatAsrClient(api_key="")
+
+    def test_transcribe_success_posts_multipart(self):
+        captured = {}
+
+        def fake_post(url, headers, fields, filename, content_type, data):
+            captured.update(url=url, auth=headers["Authorization"], fields=fields,
+                            filename=filename, content_type=content_type, data=data)
+            return 200, '{"text": " 你好世界 "}'
+
+        out = self._client(post=fake_post).transcribe(b"\x00\x00" * 160)
+        assert out == "你好世界"  # strip 生效
+        assert captured["url"] == "https://api.example.com/v1/audio/transcriptions"
+        assert captured["auth"] == "Bearer sk-test"
+        assert captured["fields"]["model"] == "SenseVoice"
+        assert "language" not in captured["fields"]  # auto 不带 language
+        assert captured["filename"] == "audio.wav"
+        assert captured["data"][:4] == b"RIFF"
+
+    def test_language_passed_when_not_auto(self):
+        seen = {}
+
+        def fake_post(url, headers, fields, *a, **k):
+            seen.update(fields)
+            return 200, '{"text": "hi"}'
+
+        self._client(post=fake_post, language="zh").transcribe(b"")
+        assert seen["language"] == "zh"
+
+    def test_http_error_raises_asr_error(self):
+        from voicehub.dictation.asr_client import AsrError
+
+        with pytest.raises(AsrError, match="HTTP 401"):
+            self._client(post=lambda *a, **k: (401, '{"error": "bad key"}')).transcribe(b"")
+
+    def test_non_json_response_raises(self):
+        from voicehub.dictation.asr_client import AsrError
+
+        with pytest.raises(AsrError, match="非 JSON"):
+            self._client(post=lambda *a, **k: (200, "<html>oops</html>")).transcribe(b"")

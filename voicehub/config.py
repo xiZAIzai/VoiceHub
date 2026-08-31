@@ -63,6 +63,9 @@ class TranscriptionConfig:
     provider: str = "volcengine_sauc"
     base_url: str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
     resource_id: str = "volc.seedasr.sauc.duration"
+    # openai_compat 供应商的转写模型名（volcengine_sauc 忽略此字段）；
+    # 仪表盘选供应商时自动带出（硅基流动 SenseVoice / Groq whisper-large-v3 等）
+    model: str = "whisper-1"
     # 鉴权二选一（2026-08-26 实测定案）：
     # - 新版控制台：api_key 单头（X-Api-Key）
     # - 旧版控制台：app_key（数字 APP ID）+ access_key（Access Token）双头；
@@ -103,6 +106,7 @@ class TranscriptionConfig:
         cfg.provider = str(data.get("provider", cfg.provider))
         cfg.base_url = str(data.get("base_url", cfg.base_url))
         cfg.resource_id = str(data.get("resource_id", cfg.resource_id))
+        cfg.model = str(data.get("model", cfg.model))
         cfg.api_key = str(data.get("api_key", cfg.api_key))
         cfg.app_key = str(data.get("app_key", cfg.app_key))
         cfg.access_key = str(data.get("access_key", cfg.access_key))

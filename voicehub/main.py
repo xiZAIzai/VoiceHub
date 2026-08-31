@@ -138,6 +138,30 @@ def _cursor_paster():
     return None
 
 
+def build_asr_provider(tc):
+    """按 transcription.provider 构造 ASR 客户端（多厂商，实现 AsrProvider 协议）。
+
+    - volcengine_sauc：火山豆包 WS v3 流式（默认）。
+    - openai_compat：OpenAI 兼容 /audio/transcriptions（硅基流动/Groq/
+      本地 Whisper 等），复用 transcription.api_key；base_url 若仍是火山
+      wss 端点则回落硅基流动默认（只切 provider 忘改端点的兜底）。
+    """
+    if tc.provider == "openai_compat":
+        from .dictation.asr_client import OpenAICompatAsrClient
+
+        base_url = tc.base_url
+        if base_url.startswith("wss://"):
+            base_url = "https://api.siliconflow.cn/v1"
+        return OpenAICompatAsrClient(
+            api_key=tc.api_key, base_url=base_url, model=tc.model,
+            language=tc.language, sample_rate=tc.sample_rate)
+    from .dictation.asr_client import VolcengineSaucClient
+
+    return VolcengineSaucClient(
+        api_key=tc.api_key, app_key=tc.app_key, access_key=tc.access_key,
+        base_url=tc.base_url, resource_id=tc.resource_id, language=tc.language)
+
+
 def build_dictation(config: Config, orchestrator: Orchestrator):
     """组装听写引擎；engine != builtin 或依赖/密钥缺失时返回 None（其余功能照常）。
 
@@ -146,15 +170,18 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
     if config.transcription.engine != "builtin":
         return None
     tc = config.transcription
-    has_credential = tc.api_key or (tc.app_key and tc.access_key)
+    if tc.provider == "openai_compat":
+        has_credential = bool(tc.api_key)
+    else:
+        has_credential = tc.api_key or (tc.app_key and tc.access_key)
     if not has_credential:
         logger.warning("transcription.engine=builtin 但未配置 ASR 凭证"
-                       "（api_key 或 app_key+access_key，走 config.local.json 或环境变量），"
-                       "听写不可用")
+                       "（provider=%s 需 api_key 或 app_key+access_key，"
+                       "走 config.local.json 或环境变量），听写不可用",
+                       tc.provider)
         return None
     try:
         from .dictation import DictationEngine, VadTracker
-        from .dictation.asr_client import VolcengineSaucClient
         from .dictation.recorder import MicrophoneRecorder
 
         vad = VadTracker(
@@ -164,14 +191,7 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
             max_duration_ms=int(tc.max_duration_sec * 1000),
         )
         recorder = MicrophoneRecorder(sample_rate=tc.sample_rate, vad=vad)
-        provider = VolcengineSaucClient(
-            api_key=tc.api_key,
-            app_key=tc.app_key,
-            access_key=tc.access_key,
-            base_url=tc.base_url,
-            resource_id=tc.resource_id,
-            language=tc.language,
-        )
+        provider = build_asr_provider(tc)
 
         def _route(text: str, metadata: dict) -> dict:
             return orchestrator.route_direct(text, metadata=metadata)
@@ -190,8 +210,7 @@ def build_dictation(config: Config, orchestrator: Orchestrator):
             recorder, provider, _route, max_duration_sec=tc.max_duration_sec,
             polisher=polisher)
         recorder.set_auto_stop_callback(engine.request_stop)
-        logger.info("builtin 听写引擎已启用（%s，资源 %s）",
-                    tc.base_url.rsplit("/", 1)[-1], tc.resource_id)
+        logger.info("builtin 听写引擎已启用（provider=%s）", tc.provider)
         return engine
     except Exception:  # noqa: BLE001 - 引擎组装失败不拖垮主程序
         logger.exception("听写引擎组装失败（sounddevice/websocket 依赖缺失?）")

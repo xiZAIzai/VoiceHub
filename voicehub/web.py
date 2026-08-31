@@ -207,276 +207,543 @@ class Dashboard:
 
 
 _INDEX_HTML = """<!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VoiceHub 仪表盘</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    /* 三主题（深色 / 浅色 / 护眼）：语义变量驱动，Tailwind 只管布局 */
+    :root, :root[data-theme="dark"] {
+      --bg: #0b1020; --bg-soft: #0f1628;
+      --card: rgba(255,255,255,.04); --card-border: rgba(255,255,255,.09);
+      --text: #e6eaf2; --muted: #97a0b5; --faint: #6b7590;
+      --input-bg: rgba(255,255,255,.06); --input-border: rgba(255,255,255,.13);
+      --ok: #34d399; --err: #f87171;
+      --shadow: 0 8px 26px rgba(0,0,0,.32);
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f4f6fb; --bg-soft: #eef1f8;
+      --card: #ffffff; --card-border: #e2e6f0;
+      --text: #1c2333; --muted: #5c667a; --faint: #9aa3b8;
+      --input-bg: #f7f8fc; --input-border: #d8deea;
+      --ok: #059669; --err: #dc2626;
+      --shadow: 0 5px 18px rgba(23,43,99,.07);
+      color-scheme: light;
+    }
+    :root[data-theme="sepia"] {
+      --bg: #c9e4cc; --bg-soft: #bddbbf;
+      --card: #dcEEDF; --card-border: #aed2b1;
+      --text: #22331f; --muted: #4f6450; --faint: #7e9380;
+      --input-bg: #ebf6ec; --input-border: #a8ccab;
+      --ok: #15803d; --err: #b91c1c;
+      --shadow: 0 5px 16px rgba(47,79,47,.10);
+      color-scheme: light;
+    }
+    [v-cloak] { display: none; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      transition: background .25s ease, color .25s ease;
+    }
+    :root[data-theme="dark"] body {
+      background:
+        radial-gradient(700px 420px at 12% -6%, rgba(99,102,241,.16), transparent 60%),
+        radial-gradient(640px 420px at 92% 4%, rgba(34,211,238,.08), transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+    .vh-card {
+      background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow);
+    }
+    .vh-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; letter-spacing: .4px;
+      color: var(--muted); margin-bottom: 14px;
+    }
+    .vh-title svg { color: var(--accent, #6366f1); flex: none; }
+    :root { --accent: #818cf8; }
+    :root[data-theme="light"] { --accent: #4f46e5; }
+    :root[data-theme="sepia"] { --accent: #3d7a44; }
+    .vh-hint { font-size: 12px; color: var(--faint); line-height: 1.7; }
+    .vh-label { display: block; font-size: 13px; color: var(--text); }
+    .vh-input {
+      width: 100%; margin-top: 4px;
+      background: var(--input-bg); border: 1px solid var(--input-border);
+      border-radius: 8px; padding: 7px 10px; font-size: 13.5px; color: var(--text);
+      outline: none; transition: border-color .15s ease;
+    }
+    .vh-input:focus { border-color: var(--accent); }
+    .vh-input.font-mono { font-size: 12.5px; }
+    .vh-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--input-bg); border: 1px solid var(--input-border);
+      color: var(--text); padding: 7px 14px; border-radius: 9px;
+      font-size: 13.5px; font-weight: 500; cursor: pointer;
+      transition: border-color .15s ease, transform .12s ease;
+    }
+    .vh-btn:hover { border-color: var(--accent); }
+    .vh-btn:active { transform: translateY(1px); }
+    .vh-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .vh-btn-primary {
+      background: linear-gradient(120deg, #6366f1, #0ea5e9);
+      border: none; color: #fff;
+      box-shadow: 0 4px 16px rgba(79,70,229,.35);
+    }
+    .vh-btn-primary:hover { filter: brightness(1.08); border: none; }
+    .vh-ok { color: var(--ok); } .vh-err { color: var(--err); }
+    .vh-faint { color: var(--faint); }
+    .vh-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 3px 10px; border-radius: 999px;
+      border: 1px solid var(--card-border); background: var(--input-bg);
+    }
+    .vh-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+    .vh-pill.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+    .vh-savebar {
+      position: sticky; bottom: 12px; display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; border-radius: 12px;
+      background: var(--card); border: 1px solid var(--card-border);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    details.vh-card summary { cursor: pointer; user-select: none; list-style: none; }
+    details.vh-card summary::-webkit-details-marker { display: none; }
+    details.vh-card summary .vh-caret { transition: transform .15s ease; display: inline-block; }
+    details.vh-card[open] summary .vh-caret { transform: rotate(90deg); }
+    .vh-table { width: 100%; font-size: 13.5px; }
+    .vh-table th { text-align: left; color: var(--faint); font-weight: 500; padding: 6px 8px; }
+    .vh-table td { padding: 7px 8px; border-top: 1px solid var(--card-border); }
+    .vh-logo { display: flex; align-items: center; gap: 10px; }
+    .vh-logo .name {
+      font-size: 20px; font-weight: 800; letter-spacing: .3px;
+      background: linear-gradient(120deg, #818cf8, #22d3ee);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
+<body class="min-h-screen">
 <div id="app" class="max-w-4xl mx-auto p-6" v-cloak>
   <header class="mb-6 flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold">VoiceHub</h1>
-      <p class="text-slate-400 text-sm">语音转写多设备分发 · 仪表盘</p>
+    <div class="vh-logo">
+      <svg width="34" height="34" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="rgba(129,140,248,.14)" stroke="rgba(129,140,248,.45)"/><rect x="13" y="6" width="6" height="13" rx="3" fill="#818cf8"/><path d="M9 15a7 7 0 0 0 14 0" stroke="#22d3ee" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M16 22v4" stroke="#22d3ee" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <div>
+        <div class="name">VoiceHub</div>
+        <div class="text-xs vh-faint">单点语音输入，多端分发</div>
+      </div>
     </div>
-    <button @click="toggleSettings"
-            class="bg-slate-700 hover:bg-slate-600 text-sm px-3 py-1.5 rounded">
-      {{ showSettings ? '返回状态页' : '设置' }}
-    </button>
+    <div class="flex items-center gap-2">
+      <button class="vh-btn" @click="cycleTheme" :title="'当前主题：' + themeLabel">
+        <svg v-if="theme === 'dark'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg v-else-if="theme === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"/></svg>
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        {{ themeLabel }}
+      </button>
+      <button class="vh-btn" @click="toggleSettings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        {{ showSettings ? '返回状态页' : '设置' }}
+      </button>
+    </div>
   </header>
 
-  <!-- 设置页（M6-③）：目标设备 / 去抖 / 超时可视化编辑，保存走 /api/config -->
+  <!-- 设置页（M6-③）：目标 / 引擎 / 润色 / 凭证 / 快捷键 / 高级，保存走 /api/config -->
   <section v-if="showSettings" class="space-y-4">
-    <div v-if="!cfg" class="text-slate-500">配置加载中…</div>
+    <div v-if="!cfg" class="vh-faint">配置加载中…</div>
     <template v-else>
-      <div class="bg-slate-800 rounded-lg p-4">
-        <h2 class="text-sm text-slate-400 mb-3">目标设备（热键 / 名称 / 固定端点，改后需重启生效）</h2>
+      <div class="vh-card">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+          目标设备（热键 / 名称 / 固定端点，改后需重启生效）
+        </h2>
         <div v-for="(t, key) in cfg.targets" :key="key" class="grid grid-cols-12 gap-2 mb-2 items-center">
-          <label class="col-span-2 text-xs text-slate-500 self-center">{{ key }}</label>
-          <input v-model="t.name" placeholder="名称" class="col-span-4 bg-slate-700 rounded px-2 py-1 text-sm">
+          <label class="col-span-2 text-xs vh-faint self-center font-mono">{{ key }}</label>
+          <input v-model="t.name" placeholder="名称" class="col-span-4 vh-input">
           <div class="col-span-2 flex items-center gap-1">
-            <span class="text-xs text-slate-500 font-mono">Alt+</span>
-            <input v-model="t.hotkey" class="w-12 bg-slate-700 rounded px-2 py-1 text-sm text-center font-mono">
+            <span class="text-xs vh-faint font-mono">Alt+</span>
+            <input v-model="t.hotkey" class="w-12 vh-input text-center font-mono">
           </div>
-          <input v-model="t.endpoint" placeholder="端点(可空,自动发现)" class="col-span-4 bg-slate-700 rounded px-2 py-1 text-sm">
+          <input v-model="t.endpoint" placeholder="端点(可空,自动发现)" class="col-span-4 vh-input">
         </div>
       </div>
-      <div class="bg-slate-800 rounded-lg p-4">
-        <h2 class="text-sm text-slate-400 mb-3">转写判定参数（保存后即时生效）</h2>
+      <div class="vh-card">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l2-8 4 16 2-6 2 4h2"/></svg>
+          转写判定参数（保存后即时生效）
+        </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="text-sm">去抖等待 stability_ms（毫秒）
-            <input type="number" v-model.number="cfg.voicehub.stability_ms"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          <label class="vh-label">去抖等待 stability_ms（毫秒）
+            <input type="number" v-model.number="cfg.voicehub.stability_ms" class="vh-input">
           </label>
-          <label class="text-sm">粘滞等待 pending_timeout_sec（秒，需覆盖最长听写）
-            <input type="number" v-model.number="cfg.voicehub.pending_timeout_sec"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          <label class="vh-label">粘滞等待 pending_timeout_sec（秒，需覆盖最长听写）
+            <input type="number" v-model.number="cfg.voicehub.pending_timeout_sec" class="vh-input">
           </label>
         </div>
       </div>
-      <!-- V4/M12-①：转写润色（LLM 后处理，四模式） -->
-      <div class="bg-slate-800 rounded-lg p-4" v-if="cfg.polish">
-        <h2 class="text-sm text-slate-400 mb-3">转写润色（保存后重启程序生效）</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label class="text-sm">模式
-            <select v-model="cfg.polish.mode"
-                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+      <!-- V4/M12-①：转写润色（多厂商预设 + 四模式） -->
+      <div class="vh-card" v-if="cfg.polish">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          转写润色（保存后重启程序生效）
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="vh-label">润色模式
+            <select v-model="cfg.polish.mode" class="vh-input">
               <option value="off">关闭（原文直出，零延迟）</option>
               <option value="light">轻整理（短句输入，输出自然句子）</option>
               <option value="structured">结构化整理（长口述，喂下游大模型）</option>
               <option value="custom">自定义 prompt</option>
             </select>
           </label>
-          <label class="text-sm">模型
-            <input v-model="cfg.polish.model"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
-          </label>
-          <label class="text-sm">接口地址 base_url
-            <input v-model="cfg.polish.base_url"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
+          <label class="vh-label">模型厂商
+            <select v-model="cfg.polish.provider" @change="onPolishProvider" class="vh-input">
+              <option value="deepseek">DeepSeek（深度求索）</option>
+              <option value="kimi">Kimi（月之暗面）</option>
+              <option value="zhipu">智谱 GLM</option>
+              <option value="qwen">通义千问（阿里云）</option>
+              <option value="ark">火山方舟（豆包）</option>
+              <option value="openai">OpenAI</option>
+              <option value="custom">自定义 OpenAI 兼容</option>
+            </select>
           </label>
         </div>
-        <label v-if="cfg.polish.mode === 'custom'" class="text-sm block mt-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <label class="vh-label">接口地址 base_url
+            <input v-model="cfg.polish.base_url" class="vh-input font-mono">
+          </label>
+          <label class="vh-label">模型
+            <input v-model="cfg.polish.model" class="vh-input font-mono">
+          </label>
+        </div>
+        <label v-if="cfg.polish.mode === 'custom'" class="vh-label block mt-3">
           自定义 prompt
-          <textarea v-model="cfg.polish.custom_prompt" rows="5"
-                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1 text-xs font-mono"></textarea>
+          <textarea v-model="cfg.polish.custom_prompt" rows="5" class="vh-input font-mono"></textarea>
         </label>
-        <p class="text-xs text-slate-500 mt-2">
-          润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
-          API Key 不在此配置（走 config.local.json 或环境变量 VOICEHUB_POLISH_API_KEY）。
-          原文与润色结果双双落库，仪表盘最近转写中可见对照。
+        <p class="vh-hint mt-3">
+          选厂商自动带出接口地址与默认模型，两项均可手改（火山方舟填 ep- 开头的接入点 ID）；
+          Key 在下方「API 凭证」卡填写。润色失败（超时/报错）自动降级为原文直出，不会挡住文字上屏；
+          原文与润色结果双双落库，「最近转写」中可见对照。
         </p>
       </div>
       <!-- V4/M12：API 凭证自助填写（写 config.local.json，gitignore 保护） -->
-      <div class="bg-slate-800 rounded-lg p-4" v-if="cred.supported">
-        <h2 class="text-sm text-slate-400 mb-3">API 凭证（保存到本机 config.local.json，重启程序生效）</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label class="text-sm">豆包 APP ID
+      <div class="vh-card" v-if="cred.supported">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          API 凭证（保存到本机 config.local.json，重启程序生效）
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="vh-label">转写 API Key
+            <span class="text-xs vh-faint">豆包新版控制台 / OpenAI 兼容供应商通用</span>
+            <input type="password" v-model="cred.transcription_api_key" placeholder="API Key"
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.transcription_api_key ? 'vh-ok' : 'vh-faint'">
+              {{ cred.has.transcription_api_key ? '已配置 ' + cred.has.transcription_api_key : '未配置' }}</span>
+          </label>
+          <label class="vh-label">润色 API Key
+            <span class="text-xs vh-faint">DeepSeek / Kimi / GLM 等，按所选厂商</span>
+            <input type="password" v-model="cred.polish_api_key" placeholder="sk-..."
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.polish_api_key ? 'vh-ok' : 'vh-faint'">
+              {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
+          </label>
+          <label class="vh-label">豆包 APP ID（旧版控制台，选填）
             <input type="password" v-model="cred.transcription_app_key" placeholder="数字 APP ID"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
-            <span class="text-xs" :class="cred.has.transcription_app_key ? 'text-emerald-400' : 'text-slate-500'">
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.transcription_app_key ? 'vh-ok' : 'vh-faint'">
               {{ cred.has.transcription_app_key ? '已配置 ' + cred.has.transcription_app_key : '未配置' }}</span>
           </label>
-          <label class="text-sm">豆包 Access Token
+          <label class="vh-label">豆包 Access Token（旧版控制台，选填）
             <input type="password" v-model="cred.transcription_access_key" placeholder="Access Token"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
-            <span class="text-xs" :class="cred.has.transcription_access_key ? 'text-emerald-400' : 'text-slate-500'">
+                   class="vh-input font-mono">
+            <span class="text-xs" :class="cred.has.transcription_access_key ? 'vh-ok' : 'vh-faint'">
               {{ cred.has.transcription_access_key ? '已配置 ' + cred.has.transcription_access_key : '未配置' }}</span>
-          </label>
-          <label class="text-sm">DeepSeek Key（润色用）
-            <input type="password" v-model="cred.polish_api_key" placeholder="sk-..."
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1 font-mono text-xs">
-            <span class="text-xs" :class="cred.has.polish_api_key ? 'text-emerald-400' : 'text-slate-500'">
-              {{ cred.has.polish_api_key ? '已配置 ' + cred.has.polish_api_key : '未配置' }}</span>
           </label>
         </div>
         <div class="flex items-center gap-3 mt-3">
-          <button @click="saveCreds" :disabled="cred.busy"
-                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+          <button @click="saveCreds" :disabled="cred.busy" class="vh-btn vh-btn-primary">
             保存凭证
           </button>
-          <span class="text-sm" :class="cred.msgOk ? 'text-emerald-400' : 'text-red-400'">{{ cred.msg }}</span>
+          <span class="text-sm" :class="cred.msgOk ? 'vh-ok' : 'vh-err'">{{ cred.msg }}</span>
         </div>
-        <p class="text-xs text-slate-500 mt-2">
-          凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库）；留空的项不改动。
-          新版控制台用户可用「豆包 API Key」——暂时请编辑 config.local.json 的 transcription.api_key 字段。
+        <p class="vh-hint mt-2">
+          凭证只写本机 config.local.json（已被 gitignore 保护，永不上传/入库），留空的项不改动，回显只显示尾 4 位。
+          豆包鉴权二选一：新版控制台填「转写 API Key」；旧版控制台填 APP ID + Access Token。
         </p>
       </div>
-      <!-- V4/M12：听写引擎切换 + 录音参数（保存后重启程序生效） -->
-      <div class="bg-slate-800 rounded-lg p-4" v-if="cfg.transcription">
-        <h2 class="text-sm text-slate-400 mb-3">听写引擎与录音参数（保存后重启程序生效）</h2>
+      <!-- V4/M12：听写引擎 + 转写供应商 + 录音参数（保存后重启程序生效） -->
+      <div class="vh-card" v-if="cfg.transcription">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
+          听写引擎与录音参数（保存后重启程序生效）
+        </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="text-sm">转写引擎
-            <select v-model="cfg.transcription.engine"
-                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          <label class="vh-label">转写引擎
+            <select v-model="cfg.transcription.engine" class="vh-input">
               <option value="shandianshuo">闪电说（剪贴板监听链路）</option>
               <option value="builtin">自建内核（本项目 · 云端 ASR）</option>
             </select>
           </label>
-          <label class="text-sm">识别语言
-            <select v-model="cfg.transcription.language"
-                    class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          <label class="vh-label" v-if="cfg.transcription.engine === 'builtin'">转写供应商
+            <select v-model="cfg.transcription.provider" @change="onAsrProvider" class="vh-input">
+              <option value="volcengine_sauc">火山豆包（WebSocket 流式直连）</option>
+              <option value="openai_compat">OpenAI 兼容转写（硅基流动 / Groq / 本地 Whisper 等）</option>
+            </select>
+          </label>
+          <label class="vh-label">识别语言
+            <select v-model="cfg.transcription.language" class="vh-input">
               <option value="auto">自动检测</option>
               <option value="zh">中文</option>
               <option value="en">英文</option>
             </select>
           </label>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <label class="text-sm">静音自动结束（毫秒，0=关闭）
-            <input type="number" v-model.number="cfg.transcription.vad_silence_ms"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"
+             v-if="cfg.transcription.engine === 'builtin' && cfg.transcription.provider === 'openai_compat'">
+          <label class="vh-label">转写接口地址 base_url
+            <input v-model="cfg.transcription.base_url" class="vh-input font-mono">
           </label>
-          <label class="text-sm">单段最长录音（秒）
-            <input type="number" v-model.number="cfg.transcription.max_duration_sec"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
-          </label>
-          <label class="text-sm">未开口放弃等待（毫秒）
-            <input type="number" v-model.number="cfg.transcription.vad_lead_in_ms"
-                   class="w-full mt-1 bg-slate-700 rounded px-2 py-1">
+          <label class="vh-label">转写模型
+            <input v-model="cfg.transcription.model" class="vh-input font-mono">
           </label>
         </div>
-        <p class="text-xs text-slate-500 mt-2">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <label class="vh-label">静音自动结束（毫秒，0=关闭）
+            <input type="number" v-model.number="cfg.transcription.vad_silence_ms" class="vh-input">
+          </label>
+          <label class="vh-label">单段最长录音（秒）
+            <input type="number" v-model.number="cfg.transcription.max_duration_sec" class="vh-input">
+          </label>
+          <label class="vh-label">未开口放弃等待（毫秒）
+            <input type="number" v-model.number="cfg.transcription.vad_lead_in_ms" class="vh-input">
+          </label>
+        </div>
+        <p class="vh-hint mt-3">
           静音自动结束 = 说完连续静音多久自动送识别（0 = 仅手动停止，推荐）；
           未开口放弃 = 按下后一直不说多久自动放弃（不消耗云端调用）。
-          切引擎需重启；两套引擎共用 Alt+N 目标粘滞。
+          「OpenAI 兼容转写」凭「转写 API Key」即可用（硅基流动 / Groq / OpenAI / 本地 Whisper server），
+          闪电说不可用的平台（如 openKylin）选「自建内核」。切引擎/供应商需重启；两套引擎共用 Alt+N 目标粘滞。
         </p>
       </div>
       <!-- V4/M11：听写系统快捷键一键注册（Wayland 下唯一可靠的全局触发） -->
-      <div class="bg-slate-800 rounded-lg p-4" v-if="shortcut.supported">
-        <h2 class="text-sm text-slate-400 mb-3">听写快捷键（系统级，注册后任何界面下都生效）</h2>
+      <div class="vh-card" v-if="shortcut.supported">
+        <h2 class="vh-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 16h10"/></svg>
+          听写快捷键（系统级，注册后任何界面下都生效）
+        </h2>
         <div class="flex items-center gap-3 flex-wrap">
           <input v-model="shortcut.binding" placeholder="如 Ctrl+Alt+V"
-                 class="bg-slate-700 rounded px-3 py-1.5 text-sm font-mono w-44">
-          <button @click="registerShortcut" :disabled="shortcut.busy"
-                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+                 class="vh-input font-mono" style="width: 11rem">
+          <button @click="registerShortcut" :disabled="shortcut.busy" class="vh-btn vh-btn-primary">
             {{ shortcut.registered ? '更新注册' : '一键注册' }}
           </button>
-          <button v-if="shortcut.registered" @click="removeShortcut"
-                  class="bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded text-sm">移除</button>
-          <span class="text-sm" :class="shortcut.msgOk ? 'text-emerald-400' : 'text-red-400'">
+          <button v-if="shortcut.registered" @click="removeShortcut" class="vh-btn">移除</button>
+          <span class="text-sm" :class="shortcut.msgOk ? 'vh-ok' : 'vh-err'">
             {{ shortcut.msg }}
           </span>
         </div>
-        <p class="text-xs text-slate-500 mt-2">
+        <p class="vh-hint mt-2">
           注册即写入系统快捷键（等效于控制中心「自定义快捷键」），按一下开始听写、再按一下结束；
-          录音中屏幕底部有波形悬浮框，识别结果自动粘贴到光标处。
+          录音中屏幕上有波形悬浮框，识别结果自动进剪贴板。
         </p>
       </div>
-      <div class="flex items-center gap-3">
-        <button @click="saveConfig" :disabled="saving"
-                class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-1.5 rounded text-sm">
+      <!-- 高级设置：默认收起，普通用户无需触碰 -->
+      <details class="vh-card" v-if="cfg.transcription">
+        <summary class="vh-title">
+          <span class="vh-caret">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+          </span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          高级设置（一般无需改动）
+        </summary>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <label class="vh-label">仪表盘端口
+            <input type="number" v-model.number="cfg.server.port" class="vh-input font-mono">
+            <span class="text-xs vh-faint">改后需重启，浏览器访问 http://127.0.0.1:新端口</span>
+          </label>
+          <label class="vh-label">录音采样率
+            <input type="number" v-model.number="cfg.transcription.sample_rate" class="vh-input font-mono">
+          </label>
+          <template v-if="cfg.transcription.provider === 'volcengine_sauc'">
+            <label class="vh-label">ASR 端点 base_url
+              <input v-model="cfg.transcription.base_url" class="vh-input font-mono">
+            </label>
+            <label class="vh-label">火山资源 ID resource_id
+              <input v-model="cfg.transcription.resource_id" class="vh-input font-mono">
+            </label>
+          </template>
+        </div>
+        <p class="vh-hint mt-3">
+          端点 / 资源 ID 仅供调试火山系新接口；OpenAI 兼容供应商的端点与模型在上方「听写引擎与录音参数」卡。
+          所有配置也可直接编辑程序旁的 config.json。
+        </p>
+      </details>
+      <div class="vh-savebar">
+        <button @click="saveConfig" :disabled="saving" class="vh-btn vh-btn-primary">
           {{ saving ? '保存中…' : '保存配置' }}
         </button>
-        <span v-if="saveMsg" :class="saveMsg.ok ? 'text-emerald-400' : 'text-red-400'" class="text-sm">
+        <span v-if="saveMsg" :class="saveMsg.ok ? 'vh-ok' : 'vh-err'" class="text-sm">
           {{ saveMsg.text }}
         </span>
       </div>
     </template>
   </section>
 
-  <section v-show="!showSettings" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div class="bg-slate-800 rounded-lg p-4">
-      <h2 class="text-sm text-slate-400 mb-2">粘滞目标</h2>
-      <div v-if="state.sticky.armed" class="text-emerald-400">
-        等待转写 → {{ stickyTargetName }}
+  <section v-show="!showSettings" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="vh-card">
+      <h2 class="vh-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        粘滞目标
+      </h2>
+      <div v-if="state.sticky.armed" class="flex items-center gap-2">
+        <span class="vh-pill on"><span class="dot"></span>等待转写</span>
+        <span class="text-sm">{{ stickyTargetName }}</span>
       </div>
-      <div v-else class="text-slate-500">空闲（按 Alt+1/2/3/4 选目标）</div>
+      <div v-else class="vh-faint text-sm">空闲（按 Alt+1/2/3/4 选目标）</div>
     </div>
-    <div class="bg-slate-800 rounded-lg p-4">
-      <h2 class="text-sm text-slate-400 mb-2">在线设备</h2>
-      <ul>
-        <li v-for="t in onlineTargets" :key="t.key" class="flex justify-between">
+    <div class="vh-card">
+      <h2 class="vh-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+        在线设备
+      </h2>
+      <ul class="text-sm">
+        <li v-for="t in onlineTargets" :key="t.key" class="flex justify-between py-0.5">
           <span>{{ t.name }}</span>
-          <span class="text-emerald-400">{{ t.type === 'local' ? '本机' : (t.device.ip + ':' + t.device.port) }}</span>
+          <span class="vh-ok">{{ t.type === 'local' ? '本机' : (t.device.ip + ':' + t.device.port) }}</span>
         </li>
-        <li v-if="!onlineTargets.length" class="text-slate-500">无在线设备</li>
+        <li v-if="!onlineTargets.length" class="vh-faint">无在线设备</li>
       </ul>
     </div>
   </section>
 
-  <section v-show="!showSettings" class="bg-slate-800 rounded-lg p-4 mb-6">
-    <h2 class="text-sm text-slate-400 mb-2">目标绑定</h2>
-    <table class="w-full text-sm">
-      <thead class="text-slate-500"><tr>
-        <th class="text-left">目标</th><th class="text-left">热键</th><th class="text-left">类型</th><th class="text-left">状态</th>
+  <section v-show="!showSettings" class="vh-card mb-4">
+    <h2 class="vh-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      目标绑定
+    </h2>
+    <table class="vh-table">
+      <thead><tr>
+        <th>目标</th><th>热键</th><th>类型</th><th>状态</th>
       </tr></thead>
       <tbody>
-        <tr v-for="t in state.targets" :key="t.key" class="border-t border-slate-700">
+        <tr v-for="t in state.targets" :key="t.key">
           <td>{{ t.name }}</td>
           <td class="font-mono">Alt+{{ t.hotkey }}</td>
-          <td>{{ t.type }}</td>
-          <td :class="t.online ? 'text-emerald-400' : 'text-slate-500'">{{ t.online ? '在线' : '离线' }}</td>
+          <td class="vh-faint">{{ t.type }}</td>
+          <td :class="t.online ? 'vh-ok' : 'vh-faint'">{{ t.online ? '在线' : '离线' }}</td>
         </tr>
       </tbody>
     </table>
   </section>
 
-  <section v-show="!showSettings" class="bg-slate-800 rounded-lg p-4">
-    <h2 class="text-sm text-slate-400 mb-2">最近转写</h2>
-    <ul>
-      <li v-for="log in logs" :key="log.id" class="border-t border-slate-700 py-2">
-        <div class="text-sm">{{ log.processed_text }}</div>
+  <section v-show="!showSettings" class="vh-card">
+    <h2 class="vh-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="10"/></svg>
+      最近转写
+    </h2>
+    <ul class="text-sm">
+      <li v-for="log in logs" :key="log.id" class="py-2" style="border-top: 1px solid var(--card-border)">
+        <div>{{ log.processed_text }}</div>
         <div v-if="log.raw_text && log.raw_text !== log.processed_text"
-             class="text-xs text-slate-600 mt-0.5">原文：{{ log.raw_text }}</div>
-        <div class="text-xs text-slate-500">→ {{ log.target_device }} · {{ log.created_at }}</div>
+             class="text-xs vh-faint mt-0.5">原文：{{ log.raw_text }}</div>
+        <div class="text-xs vh-faint">→ {{ log.target_device }} · {{ log.created_at }}</div>
       </li>
-      <li v-if="!logs.length" class="text-slate-500">暂无记录</li>
+      <li v-if="!logs.length" class="vh-faint">暂无记录</li>
     </ul>
   </section>
 
-  <footer class="text-center text-xs text-slate-600 mt-6">
+  <footer class="text-center text-xs vh-faint mt-6">
     VoiceHub v__VOICEHUB_VERSION__ · 单点语音输入，多端分发
   </footer>
 </div>
 
 <script>
 const { createApp } = Vue;
+
+// 润色厂商预设（OpenAI 兼容 chat/completions）：选厂商自动带出端点与默认模型，均可手改
+const POLISH_PRESETS = {
+  deepseek: { base_url: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
+  kimi:     { base_url: 'https://api.moonshot.cn/v1', model: 'kimi-k2-0905-preview' },
+  zhipu:    { base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7' },
+  qwen:     { base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3-max' },
+  ark:      { base_url: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-1-6-250615' },
+  openai:   { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  custom:   null,
+};
+// 按 base_url 反查厂商（老用户升级后下拉能停在正确项）
+const POLISH_PROVIDER_BY_URL = {};
+for (const [k, v] of Object.entries(POLISH_PRESETS)) {
+  if (v) POLISH_PROVIDER_BY_URL[v.base_url] = k;
+}
+
+// 转写供应商预设（builtin 引擎）
+const ASR_PRESETS = {
+  volcengine_sauc: { base_url: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream' },
+  openai_compat: { base_url: 'https://api.siliconflow.cn/v1', model: 'FunAudioLLM/SenseVoiceSmall' },
+};
+
+const THEMES = [
+  { id: 'dark', label: '深色' },
+  { id: 'light', label: '浅色' },
+  { id: 'sepia', label: '护眼' },
+];
+
 createApp({
   data() { return {
     state: { sticky: { armed: false }, targets: [], hotkeys: {} },
     logs: [],
     // 设置页（M6-③）：cfg 为 /api/config 原始结构，编辑后整份 PUT 回传
     showSettings: false, cfg: null, saving: false, saveMsg: null,
+    // 主题（localStorage 持久化，深色/浅色/护眼循环）
+    theme: 'dark',
     // V4/M11：UKUI 听写系统快捷键一键注册
     shortcut: { supported: false, registered: false, binding: 'Ctrl+Alt+V',
                 msg: '', msgOk: true, busy: false },
     // V4/M12：API 凭证（脱敏状态回显，保存只发非空项）
     cred: { supported: false, busy: false, msg: '', msgOk: true,
-            has: {}, transcription_app_key: '', transcription_access_key: '',
-            polish_api_key: '' },
+            has: {}, transcription_api_key: '', transcription_app_key: '',
+            transcription_access_key: '', polish_api_key: '' },
   }; },
   computed: {
     stickyTargetName() {
       const t = this.state.targets.find(x => x.key === this.state.sticky.target_key);
       return t ? t.name : this.state.sticky.target_key;
     },
-    onlineTargets() { return this.state.targets.filter(t => t.online); }
+    onlineTargets() { return this.state.targets.filter(t => t.online); },
+    themeLabel() {
+      const t = THEMES.find(x => x.id === this.theme);
+      return t ? t.label : '深色';
+    },
   },
   methods: {
+    applyTheme() {
+      document.documentElement.dataset.theme = this.theme;
+      localStorage.setItem('vh-theme', this.theme);
+    },
+    cycleTheme() {
+      const i = THEMES.findIndex(x => x.id === this.theme);
+      this.theme = THEMES[(i + 1) % THEMES.length].id;
+      this.applyTheme();
+    },
+    onPolishProvider() {
+      const p = POLISH_PRESETS[this.cfg.polish.provider];
+      if (p) {
+        this.cfg.polish.base_url = p.base_url;
+        this.cfg.polish.model = p.model;
+      }
+    },
+    onAsrProvider() {
+      const p = ASR_PRESETS[this.cfg.transcription.provider];
+      if (p && this.cfg.transcription.base_url !== p.base_url) {
+        this.cfg.transcription.base_url = p.base_url;
+      }
+      if (this.cfg.transcription.provider === 'openai_compat' && p.model) {
+        this.cfg.transcription.model = p.model;
+      }
+    },
     async refreshLogs() {
       const r = await fetch('/api/logs?limit=20');
       this.logs = await r.json();
@@ -486,18 +753,24 @@ createApp({
       if (this.showSettings && !this.cfg) {
         const r = await fetch('/api/config');
         this.cfg = await r.json();
+        if (!this.cfg.server) this.cfg.server = { host: '127.0.0.1', port: 8765 };
         if (this.cfg && !this.cfg.polish) this.cfg.polish = {};
         if (this.cfg && this.cfg.polish) {
           if (!this.cfg.polish.mode) this.cfg.polish.mode = 'off';
+          if (!this.cfg.polish.provider) this.cfg.polish.provider = 'deepseek';
           if (!this.cfg.polish.model) this.cfg.polish.model = 'deepseek-v4-flash';
           if (!this.cfg.polish.base_url) this.cfg.polish.base_url = 'https://api.deepseek.com/v1';
           if (this.cfg.polish.custom_prompt === undefined) this.cfg.polish.custom_prompt = '';
+          // 老配置按 base_url 反查厂商，下拉停在正确项
+          const detected = POLISH_PROVIDER_BY_URL[this.cfg.polish.base_url];
+          if (detected) this.cfg.polish.provider = detected;
         }
         if (this.cfg && !this.cfg.transcription) this.cfg.transcription = {};
-        if (this.cfg && this.cfg.transcription && !this.cfg.transcription.engine) {
-          this.cfg.transcription.engine = 'shandianshuo';
-        }
         if (this.cfg && this.cfg.transcription) {
+          if (!this.cfg.transcription.engine) this.cfg.transcription.engine = 'shandianshuo';
+          if (!this.cfg.transcription.provider) this.cfg.transcription.provider = 'volcengine_sauc';
+          if (!this.cfg.transcription.model) this.cfg.transcription.model =
+              ASR_PRESETS[this.cfg.transcription.provider].model || 'whisper-1';
           if (this.cfg.transcription.vad_silence_ms === undefined) this.cfg.transcription.vad_silence_ms = 0;
           if (this.cfg.transcription.max_duration_sec === undefined) this.cfg.transcription.max_duration_sec = 300;
           if (this.cfg.transcription.vad_lead_in_ms === undefined) this.cfg.transcription.vad_lead_in_ms = 10000;
@@ -524,6 +797,7 @@ createApp({
       this.cred.busy = true;
       try {
         const payload = { transcription: {}, polish: {} };
+        if (this.cred.transcription_api_key) payload.transcription.api_key = this.cred.transcription_api_key;
         if (this.cred.transcription_app_key) payload.transcription.app_key = this.cred.transcription_app_key;
         if (this.cred.transcription_access_key) payload.transcription.access_key = this.cred.transcription_access_key;
         if (this.cred.polish_api_key) payload.polish.api_key = this.cred.polish_api_key;
@@ -536,8 +810,8 @@ createApp({
         this.cred.msg = d.ok ? '已保存：' + (d.updated || []).join(', ') + '（重启程序生效）'
                              : '保存失败：' + (d.error || '未知错误');
         if (d.ok) {
-          this.cred.transcription_app_key = this.cred.transcription_access_key = '';
-          this.cred.polish_api_key = '';
+          this.cred.transcription_api_key = this.cred.transcription_app_key =
+              this.cred.transcription_access_key = this.cred.polish_api_key = '';
           await this.refreshCreds();
         }
       } catch (e) {
@@ -619,6 +893,9 @@ createApp({
     }
   },
   mounted() {
+    const savedTheme = localStorage.getItem('vh-theme');
+    if (savedTheme && THEMES.some(t => t.id === savedTheme)) this.theme = savedTheme;
+    this.applyTheme();
     const connect = () => {
       const ws = new WebSocket(`ws://${location.host}/ws`);
       ws.onmessage = (e) => { this.state = JSON.parse(e.data); this.refreshLogs(); };

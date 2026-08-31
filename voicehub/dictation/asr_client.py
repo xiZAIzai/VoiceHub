@@ -263,3 +263,87 @@ def _try_parse(buf: bytearray):
     payload = bytes(buf[12:12 + size])
     del buf[:12 + size]
     return ("response", flags, _maybe_gunzip(payload))
+
+
+# ---------- OpenAI 兼容转写（/audio/transcriptions，第二厂商适配） ----------
+
+def pcm_to_wav(pcm: bytes, sample_rate: int = SAMPLE_RATE, channels: int = 1,
+               sampwidth: int = 2) -> bytes:
+    """裸 PCM（16k 单声道 s16le）转 WAV 字节流（纯函数，供 multipart 上传）。"""
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(sampwidth)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+class OpenAICompatAsrClient:
+    """OpenAI 兼容转写客户端：POST {base_url}/audio/transcriptions。
+
+    一套协议覆盖多家：OpenAI(whisper-1)、Groq(whisper-large-v3)、
+    硅基流动(SenseVoice)、本地 whisper server 等；构造参数可注入，
+    post 可替换（单测无网络）。录音已是 16k 单声道，内存转 WAV 上传，
+    不落盘。
+    """
+
+    def __init__(
+        self,
+        api_key: str = "",
+        base_url: str = "https://api.siliconflow.cn/v1",
+        model: str = "FunAudioLLM/SenseVoiceSmall",
+        language: str = "auto",
+        timeout_sec: float = 60.0,
+        sample_rate: int = SAMPLE_RATE,
+        post: Optional[Callable] = None,
+    ) -> None:
+        if not api_key:
+            raise AsrError("缺少 ASR 凭证（api_key）")
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        self._model = model
+        self._language = language
+        self._timeout = timeout_sec
+        self._sample_rate = sample_rate
+        self._post = post
+
+    def transcribe(self, pcm: bytes) -> str:
+        import json as _json
+
+        post = self._post
+        if post is None:
+            post = self._httpx_post
+        fields = {"model": self._model, "response_format": "json"}
+        if self._language and self._language != "auto":
+            fields["language"] = self._language
+        status, body = post(
+            f"{self._base_url}/audio/transcriptions",
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            fields=fields,
+            filename="audio.wav",
+            content_type="audio/wav",
+            data=pcm_to_wav(pcm, self._sample_rate),
+        )
+        if status != 200:
+            raise AsrError(f"ASR 请求失败: HTTP {status}: {body[:200]}", code=status)
+        try:
+            return str(_json.loads(body).get("text", "")).strip()
+        except ValueError as e:
+            raise AsrError(f"ASR 响应非 JSON: {body[:200]}") from e
+
+    def _httpx_post(self, url, headers, fields, filename, content_type, data):
+        """httpx multipart 上传（返回 (status, text)）；trust_env=False 同润色
+        （本机 socks 代理会拦直连，2026-08-26 实测）。"""
+        import httpx
+
+        files = {"file": (filename, data, content_type)}
+        try:
+            with httpx.Client(trust_env=False, timeout=self._timeout) as client:
+                resp = client.post(url, headers=headers, data=fields, files=files)
+        except httpx.HTTPError as e:
+            raise AsrError(f"ASR 请求异常: {e}") from e
+        return resp.status_code, resp.text

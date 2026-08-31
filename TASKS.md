@@ -146,6 +146,18 @@
   （按所选厂商）+ 旧版双头（选填），全部 UI 化。
 - [x] 测试 ✅ 212 passed（新增 OpenAI 兼容客户端 6 项 + provider 工厂 4 项）。
 
+### 仪表盘秒开修复（2026-08-31 晚，用户反馈「打开卡」）
+
+- [x] 定位 ✅：页面引公网 CDN（tailwindcss/unpkg），直连实测两脚本 ~8s
+  （浏览器不走代理时白屏等待），且断网即白屏；本机服务本身 0.8ms。
+- [x] 修复 ✅（**通用发行向，非本机定制**）：vendor 本地化——Tailwind 407KB +
+  Vue 3.5.42 167KB 收编 `voicehub/static/vendor/`（入 git），打包 spec
+  （Linux + Windows daemon）datas 收进包体，`/static/vendor/{name}` 白名单路由
+  （FileResponse，路径穿越拒绝）。双平台用户一律零外网依赖、离线可用。
+- [x] 验证 ✅：打包后实例 GET / 0.4ms、vendor 各 ~1ms、HTML 外网引用清零；
+  AppDir 内确认 `_internal/voicehub/static/vendor/` 存在；213 passed（+vendor 路由测试）。
+- [x] README 致谢补 Vue/Tailwind（MIT）。
+
 > V4 增值方向（内核落地后启用）：记忆系统 + 项目管理接入，按项目隔离转写历史。
 
 ## 运维纪律（事故存档）

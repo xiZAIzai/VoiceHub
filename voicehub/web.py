@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -23,6 +25,19 @@ from .storage import Storage
 from . import __version__
 
 logger = logging.getLogger(__name__)
+
+# 前端 vendor 依赖（随包分发，浏览器零外网请求；断网/无代理也不再白屏）
+_VENDOR_FILES = {"tailwind.js", "vue.global.prod.js"}
+
+
+def _static_vendor_dir():
+    """vendor 目录：PyInstaller 解包目录优先（spec datas 收编），源码跑回包目录。"""
+    base = getattr(sys, "_MEIPASS", None)
+    root = Path(base) if base else Path(__file__).resolve().parent
+    for candidate in (root / "voicehub" / "static" / "vendor", root / "static" / "vendor"):
+        if candidate.is_dir():
+            return candidate
+    return Path(__file__).resolve().parent / "static" / "vendor"
 
 
 def collect_state(
@@ -98,6 +113,21 @@ class Dashboard:
             from fastapi.responses import HTMLResponse
 
             return HTMLResponse(_INDEX_HTML)
+
+        @app.get("/static/vendor/{name}")
+        def vendor_js(name: str):
+            """前端依赖本地化（Tailwind/Vue vendor 文件，随包分发）。
+
+            2026-08-31 卡顿定案：页面引公网 CDN，直连（浏览器不走代理）时两个
+            脚本 ~8s 白屏，且断网即白屏。白名单命名杜绝路径穿越。
+            """
+            from fastapi.responses import FileResponse
+
+            if name not in _VENDOR_FILES:
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+            return FileResponse(_static_vendor_dir() / name, media_type="application/javascript")
 
         @app.get("/api/state")
         def api_state():
@@ -212,8 +242,9 @@ _INDEX_HTML = """<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VoiceHub 仪表盘</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- 前端依赖随包本地分发（/static/vendor）：不走公网 CDN，断网/无代理秒开 -->
+  <script src="/static/vendor/tailwind.js"></script>
+  <script src="/static/vendor/vue.global.prod.js"></script>
   <style>
     /* 三主题（深色 / 浅色 / 护眼）：语义变量驱动，Tailwind 只管布局 */
     :root, :root[data-theme="dark"] {

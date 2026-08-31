@@ -182,6 +182,8 @@ Linux 开发/验证环境为 WSL2 Ubuntu 22.04（与 CI runner 一致）；验�
 - [闪电说](https://shandianshuo.cn/)（前身「代体 Daiti」）：优秀的本地 AI 离线语音输入法
   （Windows / macOS）。VoiceHub 的剪贴板监听分发链路兼容其输出，检测到在线时优先使用；
   二者为独立产品，无隶属关系。感谢其对个人语音输入体验的贡献。
+- [Vue.js](https://vuejs.org/) 与 [Tailwind CSS](https://tailwindcss.com/)（均为 MIT）：
+  Web 仪表盘前端依赖，已随包本地分发（`voicehub/static/vendor/`），不依赖公网 CDN。
 
 ## License
 

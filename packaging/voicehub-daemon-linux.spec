@@ -21,7 +21,12 @@ a = Analysis(
     [os.path.join(SPECPATH, "entry_daemon.py")],
     pathex=[ROOT],  # 让 voicehub 包在分析期可导入
     binaries=[],
-    datas=[(os.path.join(ROOT, "assets", "voicehub.png"), "assets")],  # 托盘图标
+    datas=[
+        (os.path.join(ROOT, "assets", "voicehub.png"), "assets"),  # 托盘图标
+        # 仪表盘前端 vendor（Tailwind/Vue 本地化：免公网 CDN 卡顿/断网白屏）
+        (os.path.join(ROOT, "voicehub", "static", "vendor"),
+         os.path.join("voicehub", "static", "vendor")),
+    ],
     hiddenimports=[
         *collect_submodules("uvicorn"),
         # pynput 平台后端（Linux 相关；名字写死的理由见文件头注释）

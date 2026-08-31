@@ -32,6 +32,9 @@ a = Analysis(
     [os.path.join(SPECPATH, "entry_daemon.py")],
     pathex=[ROOT],  # 让 voicehub 包在分析期可导入
     binaries=_extra_binaries,
+    # 仪表盘前端 vendor（Tailwind/Vue 本地化：免公网 CDN 卡顿/断网白屏）
+    datas=[(os.path.join(ROOT, "voicehub", "static", "vendor"),
+            os.path.join("voicehub", "static", "vendor"))],
     hiddenimports=[
         # pystray 按平台动态导入托盘后端，静态分析不可见
         "pystray._win32",

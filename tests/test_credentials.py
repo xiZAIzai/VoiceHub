@@ -85,3 +85,17 @@ def test_credentials_endpoints_roundtrip(tmp_path):
 def test_credentials_absent_graceful():
     app = Dashboard(Config()).build_app()
     assert TestClient(app).get("/api/credentials").json()["ok"] is False
+
+
+def test_vendor_js_served_locally():
+    """仪表盘前端依赖本地分发：/static/vendor 白名单命中返回 JS，未知名 404。"""
+    app = Dashboard(Config()).build_app()
+    c = TestClient(app)
+    r = c.get("/static/vendor/vue.global.prod.js")
+    assert r.status_code == 200
+    assert "javascript" in r.headers["content-type"]
+    assert len(r.content) > 100_000  # 完整 vendor 文件而非错误页
+    r2 = c.get("/static/vendor/tailwind.js")
+    assert r2.status_code == 200 and len(r2.content) > 300_000
+    assert c.get("/static/vendor/../config.py").status_code == 404  # 路径穿越拒绝
+    assert c.get("/static/vendor/notexist.js").status_code == 404

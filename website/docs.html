@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>使用文档 — VoiceHub</title>
-<meta name="description" content="VoiceHub 使用文档：快速上手、双引擎与转写供应商配置、AI 润色模型厂商选择、多端分发、本地接口参考与常见问题。">
+<meta name="description" content="VoiceHub 使用文档：快速上手、双引擎与转写供应商配置、AI 润色模型厂商选择、多端分发、移动端员工机、本地接口参考与常见问题。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1020'/%3E%3Crect x='13' y='6' width='6' height='13' rx='3' fill='%236366f1'/%3E%3Cpath d='M9 15a7 7 0 0 0 14 0' stroke='%2322d3ee' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M16 22v4' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -107,6 +107,7 @@
     <a href="#engine">转写引擎与供应商</a>
     <a href="#polish">AI 润色与模型厂商</a>
     <a href="#dispatch">多端分发</a>
+    <a href="#mobile">移动端员工机</a>
     <a href="#hotkey">听写快捷键</a>
     <a href="#vad">录音参数与 VAD</a>
     <a href="#api">本地接口参考</a>
@@ -238,8 +239,26 @@ GET  /health     # 存活探测</code></pre>
       <p>UDP 心跳：接收端每 4 秒向 <code>255.255.255.255:9898</code> 广播 <code>{"svc":"voicehub","name":"...","port":5050}</code>，主控机据此自动发现。</p>
     </section>
 
+    <section id="mobile">
+      <h2><span class="sec-no">09</span>移动端员工机<span class="badge">Termux · 实验</span></h2>
+      <p>把 Android 手机也纳入「员工机」：装 Termux（F-Droid 版）后三步：</p>
+      <ol>
+        <li>安装 <strong>Termux:API</strong> App（与 Termux 本体配套，剪贴板/通知靠它）；</li>
+        <li>Termux 里执行：<code>bash &lt;(curl -sL https://raw.githubusercontent.com/xiZAIzai/VoiceHub/main/scripts/termux_setup.sh) 员工一号</code>（或先 git clone 再跑 scripts/termux_setup.sh）；</li>
+        <li>手机与主控机连同一 WiFi，主控机端 Alt+N 选它即可分发。</li>
+      </ol>
+      <p>收文行为（零权限路线）：</p>
+      <ul>
+        <li>文本自动写入手机剪贴板，并弹系统通知（带字数与内容预览，同 id 替换不刷屏）；</li>
+        <li>到目标 App 里<strong>长按 → 粘贴</strong>即上屏。Android 10+ 禁止后台模拟粘贴，这是零权限路线的正常形态；</li>
+        <li>有 root 的设备会尝试直接注入粘贴（<code>input keyevent 279</code>），成功则免长按；</li>
+        <li>不想要通知加 <code>--no-notify</code>；改名/改端口见 <code>python -m voicehub.tablet_server --help</code>。</li>
+      </ul>
+      <div class="tip"><b>保活</b>：脚本已申请 termux-wake-lock；若厂商系统杀后台，把 Termux 锁在最近任务里并关闭其电池优化。接口与桌面接收端完全一致（POST /paste、GET /health、UDP 9898 心跳）。</div>
+    </section>
+
     <section id="privacy">
-      <h2><span class="sec-no">09</span>数据与隐私</h2>
+      <h2><span class="sec-no">10</span>数据与隐私</h2>
       <ul>
         <li>API Key 只写入程序旁的 <code>config.local.json</code>（权限 600，已被 gitignore），永不上传、不入库；也可用环境变量 <code>VOICEHUB_ASR_API_KEY</code> / <code>VOICEHUB_ASR_APP_KEY</code> / <code>VOICEHUB_ASR_ACCESS_KEY</code> / <code>VOICEHUB_POLISH_API_KEY</code> 注入；</li>
         <li>仪表盘凭证卡只显示尾 4 位，接口永不回传完整 Key；</li>
@@ -249,7 +268,7 @@ GET  /health     # 存活探测</code></pre>
     </section>
 
     <section id="faq">
-      <h2><span class="sec-no">10</span>常见问题</h2>
+      <h2><span class="sec-no">11</span>常见问题</h2>
       <h3>按了听写快捷键没反应？</h3>
       <p>Linux/UKUI：回设置页点一次「一键注册」（系统重启后快捷键枚举会刷新）；或先用托盘菜单「开始听写」验证链路本身是否正常。</p>
       <h3>识别结果没有自动粘贴到光标处？</h3>
@@ -260,6 +279,8 @@ GET  /health     # 存活探测</code></pre>
       <p>三查：模式是否还停在「关闭」；润色 Key 是否已填；引擎是否为自建内核（闪电说链路有它自己的润色）。润色失败时自动降级原文直出，不会挡住上屏。</p>
       <h3>8765 端口被占用？</h3>
       <p>设置页「高级设置」改仪表盘端口，重启后用新地址访问。接收端 5050 / 心跳 9898 同理可在配置中调整。</p>
+      <h3>手机收文后怎么粘贴？</h3>
+      <p>Android 10+ 禁止后台模拟粘贴，零权限路线是「自动进剪贴板 + 通知提醒」，到目标 App 长按粘贴；有 root 设备自动注入直贴。详见「移动端员工机」章节。</p>
       <h3>接收端没被自动发现？</h3>
       <p>确认与主控机同一网段、路由器未隔离 UDP 广播；仍不行就在目标里写死 <code>http://IP:5050/paste</code>。</p>
       <h3>支持哪些系统？</h3>

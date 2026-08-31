@@ -69,6 +69,9 @@ Windows 下安装即用；非 Windows 环境自动跳过。
   也可在仪表盘「设置」页改；托盘可勾选开机自启）。日志在 `logs\voicehub.log`。
 - 笔记本（Windows）：双击 `VoiceHubReceiver.exe`（默认名称 `laptop`；与 config 的 target key 不同时，
   给快捷方式加参数 `--name <key>`）。
+- **Android（M14，实验）**：Termux 员工机——装 Termux + Termux:API 两个 App 后，
+  Termux 内执行 `bash <(curl -sL https://raw.githubusercontent.com/xiZAIzai/VoiceHub/main/scripts/termux_setup.sh) 员工一号`。
+  零权限路线：收文自动进剪贴板 + 通知提醒（长按粘贴）；有 root 自动注入直贴。
 - **Linux（V3）**：主控 `VoiceHub-x86_64.AppImage`、接收端 `VoiceHubReceiver-x86_64.AppImage`
   （Ubuntu 22.04 构建，openKylin 等兼容发行版可用）：
 

@@ -113,7 +113,7 @@ VoiceHub 内置一套独立的听写引擎（`transcription.engine: builtin`）�
 新版系统）。
 
 **双引擎关系**：`shandianshuo`（默认）与 `builtin` 共用 Alt+N 目标粘滞与分发链路，
-设置页随时切换；闪电说不可用的平台（如 openKylin 上其 UI 渲染异常）用 builtin 即可
+默认 builtin（填 Key 即用）；已装闪电说可在设置页随时切换
 完全替代。
 
 **方式二：源码运行**

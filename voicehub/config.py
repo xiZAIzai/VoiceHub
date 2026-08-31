@@ -53,13 +53,14 @@ class TargetConfig:
 class TranscriptionConfig:
     """V4/ADR-9 自建转写内核（builtin 引擎）配置。
 
-    - `engine`：shandianshuo（默认，剪贴板监听链路）| builtin（自建录音 → 云 ASR → 直通）。
+    - `engine`：builtin（默认，自建录音 → 云 ASR → 直通；新用户填 Key 即用）
+      | shandianshuo（剪贴板监听链路，已装闪电说的兼容选择）。
     - 密钥安全：种子 config.json 恒不放密钥；真实值走同目录 config.local.json
       （深度合并覆盖）或环境变量 `VOICEHUB_ASR_API_KEY`（最高优先级）。
     - 端点/资源默认值即 2026-08-25 spike 实测结论（豆包语音 openspeech WS v3）。
     """
 
-    engine: str = "shandianshuo"
+    engine: str = "builtin"
     provider: str = "volcengine_sauc"
     base_url: str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
     resource_id: str = "volc.seedasr.sauc.duration"

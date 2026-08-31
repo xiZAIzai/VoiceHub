@@ -13,7 +13,7 @@ from voicehub.clipboard_monitor import ClipboardMonitor
 
 def test_transcription_defaults():
     tc = Config().transcription
-    assert tc.engine == "shandianshuo"
+    assert tc.engine == "builtin"  # v0.5：新装默认自建内核（填 Key 即用）
     assert tc.api_key == ""
     assert tc.base_url.endswith("bigmodel_nostream")
     assert tc.resource_id == "volc.seedasr.sauc.duration"

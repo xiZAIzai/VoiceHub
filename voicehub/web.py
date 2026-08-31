@@ -430,8 +430,8 @@ _INDEX_HTML = """<!doctype html>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="vh-label">转写引擎
             <select v-model="cfg.transcription.engine" class="vh-input">
-              <option value="shandianshuo">闪电说（剪贴板监听链路）</option>
-              <option value="builtin">自建内核（本项目 · 云端 ASR）</option>
+              <option value="builtin">自建内核（推荐 · 云端 ASR，本项目）</option>
+              <option value="shandianshuo">闪电说（已安装时的兼容链路）</option>
             </select>
           </label>
           <label class="vh-label" v-if="cfg.transcription.engine === 'builtin'">转写供应商
@@ -821,7 +821,7 @@ createApp({
         }
         if (this.cfg && !this.cfg.transcription) this.cfg.transcription = {};
         if (this.cfg && this.cfg.transcription) {
-          if (!this.cfg.transcription.engine) this.cfg.transcription.engine = 'shandianshuo';
+          if (!this.cfg.transcription.engine) this.cfg.transcription.engine = 'builtin';
           if (!this.cfg.transcription.provider) this.cfg.transcription.provider = 'volcengine_sauc';
           if (!this.cfg.transcription.model) this.cfg.transcription.model =
               ASR_PRESETS[this.cfg.transcription.provider].model || 'whisper-1';

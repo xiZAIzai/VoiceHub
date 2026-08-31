@@ -16,7 +16,7 @@
     "trigger_key": "alt"
   },
   "transcription": {
-    "engine": "shandianshuo",
+    "engine": "builtin",
     "provider": "volcengine_sauc",
     "base_url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream",
     "resource_id": "volc.seedasr.sauc.duration",

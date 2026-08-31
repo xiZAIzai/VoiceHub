@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VoiceHub — 单点语音输入，多端分发</title>
-<meta name="description" content="按下热键说一句话，AI 润色后的文本即刻进入剪贴板，或推送到笔记本、平板的光标处。开源、本地密钥、托盘常驻。Windows / Linux 双平台。">
+<meta name="description" content="一个人，调度一支团队：对着主控机说一句话，整理好，点名发给每台接收端。开源、本地密钥、零配置组网。Windows / Linux 双平台。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1020'/%3E%3Crect x='13' y='6' width='6' height='13' rx='3' fill='%236366f1'/%3E%3Cpath d='M9 15a7 7 0 0 0 14 0' stroke='%2322d3ee' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M16 22v4' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -305,7 +305,7 @@
 <header class="hero wrap" id="top">
   <span class="badge"><span class="dot"></span>v0.4.1 · 自建转写内核 + 凭证自助配置</span>
   <h1>单点语音输入，<br><span class="grad">多端分发</span></h1>
-  <p class="lead">语音转写有很多产品做得很好，VoiceHub 解决的是「最后一步」：把你的一台桌面主机变成整个设备群的<strong>语音控制台</strong>——说一次，文字一键分发到台式机、笔记本、平板，不用再来回切换设备、重复输入。开源免费，密钥只存本机。</p>
+  <p class="lead">对着主控机说一句话，VoiceHub 把它整理成能直接用的文字，点名发给团队里的<strong>「员工一号」「员工二号」</strong>——每台接收端，就是一名员工。一个人，一张嘴，调度一支团队；产品解决的，正是从「说了」到「到位」的最后一步。开源免费，密钥只存本机。</p>
   <div class="cta-row">
     <a class="btn btn-primary" href="#download">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -314,7 +314,7 @@
     <a class="btn btn-ghost" href="https://github.com/xiZAIzai/VoiceHub" target="_blank" rel="noopener">查看源码</a>
   </div>
   <div class="hero-meta">
-    <span>🎛️ 一台主机 · 全设备语音控制台</span>
+    <span>🎛️ 一台主控机 · 调度一支团队</span>
     <span>🖥️ Windows · Linux</span>
     <span>⚖️ MIT 开源</span>
     <span>🔑 密钥本地存储</span>
@@ -346,13 +346,13 @@
     <div class="sec-head reveal">
       <div class="sec-kicker">Features</div>
       <h2>转写不是壁垒，分发才是</h2>
-      <p>转写交给成熟引擎完成；VoiceHub 是你的语音控制台——一台主机调度全部设备，把每句话送到该去的地方，全程不需要打开任何窗口。</p>
+      <p>转写交给成熟引擎完成；VoiceHub 是你的指挥台——一台主控机调度一支团队，把每句话送到该去的地方，全程不需要打开任何窗口。</p>
     </div>
     <div class="grid">
       <div class="card reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
         <h3>多端分发<span style="display:inline-block;font-size:11px;font-weight:600;color:#67e8f9;border:1px solid rgba(34,211,238,.45);border-radius:999px;padding:1px 9px;margin-left:8px;vertical-align:2px">核心创新</span></h3>
-        <p>把一台桌面主机变成全设备的语音控制台：UDP 心跳自动发现局域网设备，零配置组网；台式机直写剪贴板，笔记本 / 平板（含 Termux）接收端收文即自动粘贴。从此告别设备间来回切换、重复输入。</p>
+        <p>主控机上说的每句话，直落本机剪贴板；局域网内的接收端由 UDP 心跳自动发现，零配置组网。一句话点名「员工一号」「员工二号」，收文端自动粘贴落地——一个人，调度一支团队。</p>
       </div>
       <div class="card reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
@@ -388,13 +388,13 @@
     <div class="sec-head reveal">
       <div class="sec-kicker">How it works</div>
       <h2>四步，从开口到落地</h2>
-      <p>一台控制台静默调度，全程无需打开任何窗口。</p>
+      <p>一台主控机静默调度，全程无需打开任何窗口。</p>
     </div>
     <div class="flow">
       <div class="step reveal"><span class="num">STEP 1</span><h3>按热键开口说</h3><p>全局热键触发录音，悬浮波形窗实时反馈；再按一次或静默超时自动结束。</p></div>
       <div class="step reveal"><span class="num">STEP 2</span><h3>云端流式转写</h3><p>音频分片流式上传火山豆包 ASR，边录边传，说完几乎无需等待。</p></div>
       <div class="step reveal"><span class="num">STEP 3</span><h3>AI 润色（可选）</h3><p>DeepSeek 按所选模式整理口语：精炼、结构化模板或你的自定义提示词。</p></div>
-      <div class="step reveal"><span class="num">STEP 4</span><h3>一键分发到多端</h3><p>结果直进台式机剪贴板；按目标热键推送，笔记本、平板接收端自动粘贴——全程无需手动中转，这是一般转写工具给不了的。</p></div>
+      <div class="step reveal"><span class="num">STEP 4</span><h3>一键分发到多端</h3><p>主控机的结果直进本机剪贴板；按目标热键点名，对应接收端（员工）自动收文粘贴——全程无需手动中转，这是一般转写工具给不了的。</p></div>
     </div>
   </div>
 </section>
@@ -441,10 +441,10 @@
         </div>
         <div class="dl-list">
           <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHub-windows-x64.zip">
-            <span class="file">VoiceHub-windows-x64.zip</span><span class="role">主控 · 台式机</span>
+            <span class="file">VoiceHub-windows-x64.zip</span><span class="role">主控端 · 指挥台</span>
           </a>
           <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHubReceiver-windows-x64.zip">
-            <span class="file">VoiceHubReceiver-windows-x64.zip</span><span class="role">接收端 · 笔记本</span>
+            <span class="file">VoiceHubReceiver-windows-x64.zip</span><span class="role">接收端 · 员工机</span>
           </a>
         </div>
         <p class="note">解压即用。主控双击 VoiceHub.exe 托盘常驻，浏览器访问 127.0.0.1:8765 打开仪表盘配置热键与凭证。</p>
@@ -456,10 +456,10 @@
         </div>
         <div class="dl-list">
           <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHub-x86_64.AppImage">
-            <span class="file">VoiceHub-x86_64.AppImage</span><span class="role">主控 · 台式机</span>
+            <span class="file">VoiceHub-x86_64.AppImage</span><span class="role">主控端 · 指挥台</span>
           </a>
           <a class="dl-item" href="https://github.com/xiZAIzai/VoiceHub/releases/latest/download/VoiceHubReceiver-x86_64.AppImage">
-            <span class="file">VoiceHubReceiver-x86_64.AppImage</span><span class="role">接收端 · 第二台设备</span>
+            <span class="file">VoiceHubReceiver-x86_64.AppImage</span><span class="role">接收端 · 员工机</span>
           </a>
         </div>
         <p class="note">chmod +x 后直接运行。openKylin / Ubuntu / Debian 等发行版通用（低 glibc 构建）。建议安装 wl-clipboard（Wayland 剪贴板）。</p>
